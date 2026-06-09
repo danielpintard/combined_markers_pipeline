@@ -1,9 +1,9 @@
 #!/bin/bash
-#SBATCH --mem=150g
-#SBATCH --cpus-per-task=64
-#SBATCH --time=3:00:00 # need to see how long each step takes
-#SBATCH --gres=lscratch:25 # need to calculate how much is needed
-#SBATCH --job-name="NSForest_combined_markers"
+#SBATCH --mem=150g # default
+#SBATCH --cpus-per-task=72 # default 
+#SBATCH --time=8:00:00 
+#SBATCH --gres=lscratch:50 # default
+#SBATCH --job-name="NSForest_combined_markers" # default
 
 # future: add conda-pack functionality so it should be able to work on any grid
 # [ ]  add in -h usage details
@@ -72,6 +72,7 @@ echo "Var Column: $VAR_COL" >> "$RUN_LOG"
 echo "Endo Labels: ${ENDO_LABELS[*]}" >> "$RUN_LOG"
 echo "CXG Flag Used: ${CXG_FLAG:-None}" >> "$RUN_LOG"
 echo "BALANCE_GROUPS Flag Used: ${BALANCE_GROUPS:-None}" >> "$RUN_LOG"
+echo "BINARY_THRESHOLDING setting used: ${BINARY_THRESHOLDING:-None}" >> "$RUN_LOG"
 echo "MEET_AT_VALUE Flag Used: ${MEET_AT_VALUE:-None}" >> "$RUN_LOG"
 echo "STANDARD_DS Flag Used: ${STANDARD_DS:-None}" >> "$RUN_LOG"
 echo "N_CELLS_TO_KEEP: ${N_CELLS_TO_KEEP:-None}" >> "$RUN_LOG"
@@ -109,5 +110,4 @@ python py_scripts/get_markers_and_eval.py \
 
 echo "" >> "$RUN_LOG"
 echo "Pipeline complete at $(date)" >> "$RUN_LOG"
-    
 

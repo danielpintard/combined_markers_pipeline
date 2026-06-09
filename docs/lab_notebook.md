@@ -1,0 +1,14 @@
+# Entry: 06/08/2026 @ 4:23 PM
+
+I have been developing `combined_markers_pipeline` since March 2026 and have been iterating upon it and making necessary corrections/optimizations when the need for them arises. I think it is worthwhile for me to document the production of this pipeline, as well as the data flow, since we have collected data from an array of sources and they've been processed differently depending on their needs. Documenting data flow should show a user of this pipeline where they can stably retrieve the starting data object and then process it for preparation as input for the pipeline, and what happens to the data after the fact.
+
+### Review Spec of first iteration of pipeline and additions made
+At its core, the pipeline is composed of two scripts, `ingest.py` - which reads in an adata object and processes and checks it before passing it over to `get_markers_and_eval.py` - which runs the NS-Forest functionality for getting global, local, and class markers. These two scripts are called sequentially in `master_script.sh`.
+
+As of 06/08/2026, I've added `submit_sample_sheet.sh` script which parses a .tsv file produced by the `create_sample_sheet.ipynb` notebook to make it easier to submit individual jobs for each dataset. I have made improvements to pipeline logging by including console output in the run_config file output as well + improving compartmentalization and naming of slurm output logs. This provides documents that can reliably detail what has been done to the data throughout the pipeline, and what parameters, options, and specs were used for each run. I have also initialized the dev repo for this pipeline as a github repo so that I can track changes. 
+
+Unfortunately, it is likely that the initial stable version of this pipeline is lost given that I didn't start tracking changes until I started refactoring the code. It is not a super big deal given the only main changes made were the adddition of sample sheet capabilities, improved logging and taking a more OOP approach to organizing the code in ingest.py (mainly to handle ability of pipeline to take in single CLI call or work with sample sheet submission).
+
+### Data Flow
+I will now document how the data is sourced and processed prior to and while being ran through the pipeline. All data was either pulled from CellXGene, shared via email, or shared with me from a Scheuermann Lab team member via our shared HPC workspace. h5ad objects were obtained for each dataset, whether the dataset was readily available in that format or if it needed to be converted from a SingleCellExperiment, Seurat, or some other R object to h5ad. There are two cases where extra editing was made to objects, as seen in my `scratchpad.ipynb` notebook: 1) changing the .var `_index` field for LungMap CellRef to `gene_symbol` to circumvent any issues with writing the ingested+processed h5ad file to tmp disk during the pipeline
+

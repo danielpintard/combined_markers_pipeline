@@ -2,19 +2,20 @@
 # NOTE: For testing purposes, I should have this script report at what datetime were data objects deleted to clear memory, because that would be great for crossreferencing
 #       with the memory usage overtime for a given job, ex. if I see a drop in memory usage, that could suggest an adata object being deleted is the reason why
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+import warnings
+warnings.filterwarnings('ignore')
+
 import scanpy as sc
 import anndata as ad
 import numpy as np
 import pandas as pd
 import argparse
 import os
-import warnings
 import matplotlib.pyplot as plt
 import seaborn as sns
 import ast
 import gc
 import copy
-warnings.filterwarnings('ignore')
 
 import nsforest as ns
 from nsforest import preprocessing as pp
@@ -52,14 +53,16 @@ def barplot_nsf_res(df:pd.DataFrame,
     
     melted_df = df.melt(id_vars = 'clusterName', value_vars=value_vars, var_name = 'classification_metric', value_name='value')
     
-    plt.figure(figsize=figsize, constrained_layout = True)
+    plt.figure(figsize=figsize, 
+            #    constrained_layout = True
+               )
     metrics_barplot = sns.barplot(data = melted_df, x = 'clusterName', y = 'value', hue='classification_metric', legend = 'full')
     metrics_barplot.set_xticklabels(melted_df['clusterName'].unique(), rotation = 35, ha = 'right')
     metrics_barplot.legend(loc = 'center left', bbox_to_anchor=(1.00, 0.5))
     
     if save:
         plt.tight_layout()
-        plt.savefig(save_path, dpi = 150, bbox_inches = 'tight')
+        plt.savefig(save_path, dpi = 150, bbox_inches='tight')
     else:
         plt.show()
 
@@ -172,6 +175,11 @@ barplot_nsf_res(
 ###################### GET LOCAL MARKERS FOR LOCAL DATASET ######################
 print("###################### GETTING LOCAL MARKERS FOR LOCAL DATASET ######################\n")
 local_adata = adata[adata.obs[cluster_header].isin(endo_labels)].copy()
+
+# gotta make brand new dendrogram for local adata
+local_adata.obs[cluster_header] = local_adata.obs[cluster_header].cat.remove_unused_categories()
+if f'dendrogram_{cluster_header}' in local_adata.uns:
+    del local_adata.uns[f'dendrogram_{cluster_header}']
 
 ns.pp.dendrogram(
     local_adata,
@@ -449,7 +457,7 @@ combined_vs_locglob_p.legend(
     bbox_to_anchor=(1.00, 0.5)
     )
 
-plt.savefig(os.path.join(results_dir, 'figures', 'barplots', "combined_vs_loc_on_glob_fscore.png"), dpi=200)
+plt.savefig(os.path.join(results_dir, 'figures', 'barplots', "combined_vs_loc_on_glob_fscore.png"), dpi=200, bbox_inches='tight')
 
 plt.figure(figsize=(6,4))
 combined_vs_locglob_p = sns.barplot(
@@ -470,4 +478,4 @@ combined_vs_locglob_p.legend(
     bbox_to_anchor=(1.00, 0.5)
     )
 
-plt.savefig(os.path.join(results_dir, 'figures', 'barplots', "combined_vs_loc_on_glob_precision.png"), dpi=200)
+plt.savefig(os.path.join(results_dir, 'figures', 'barplots', "combined_vs_loc_on_glob_precision.png"), dpi=200, bbox_inches='tight')

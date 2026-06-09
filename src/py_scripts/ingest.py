@@ -31,7 +31,7 @@ def process_h5ad(data_id, data_path, args):
         adata.var.index = adata.var['feature_name'].astype(str)
         adata.var_names_make_unique()
         adata.var.index.name = None
-    elif args.var_col == "":
+    elif args.var_col == "NONE":
         var_col = adata.var_names
     else:
         var_col = args.var_col
@@ -165,6 +165,10 @@ def process_h5ad(data_id, data_path, args):
             use_raw = args.use_raw,
             save = f"_{data_id}_local_data.png"
         )
+        
+    print(f"[{data_id}] Formatting PCA matrix to float64 to prevent downstream bugs...")
+    if 'X_pca' in adata.obsm:
+        adata.obsm['X_pca'] = adata.obsm['X_pca'].astype(np.float64)
 
     os.makedirs(os.path.join(args.tmpdir, f'{data_id}_tmp_files', 'h5ads'), exist_ok=True)
     adata.write(os.path.join(args.tmpdir, f'{data_id}_tmp_files', 'h5ads', f'{data_id}_ingested.h5ad'))
