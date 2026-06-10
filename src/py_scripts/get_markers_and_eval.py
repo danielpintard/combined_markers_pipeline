@@ -79,6 +79,8 @@ global_adata = adata.copy()
 
 os.makedirs(os.path.join(results_dir, 'figures', 'dendrograms'), exist_ok=True)
 #### create and save dendrogram of global data. 'X_pca' should be precomputed in a controlled manner
+sc.tl.dendrogram(global_adata, groupby=cluster_header, use_rep='X_pca')
+
 ns.pp.dendrogram(
     global_adata,
     cluster_header=cluster_header,
@@ -180,6 +182,8 @@ local_adata = adata[adata.obs[cluster_header].isin(endo_labels)].copy()
 local_adata.obs[cluster_header] = local_adata.obs[cluster_header].cat.remove_unused_categories()
 if f'dendrogram_{cluster_header}' in local_adata.uns:
     del local_adata.uns[f'dendrogram_{cluster_header}']
+
+sc.tl.dendrogram(local_adata, groupby=cluster_header, use_rep='X_pca')
 
 ns.pp.dendrogram(
     local_adata,

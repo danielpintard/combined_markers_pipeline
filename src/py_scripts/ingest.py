@@ -104,6 +104,13 @@ def process_h5ad(data_id, data_path, args):
     if "X_pca" not in adata.obsm:
         print("No `X_pca` in .obsm, calculating...")
         sc.pp.pca(adata, n_comps=30, random_state=seed)
+    elif adata.obsm['X_pca'].shape[1] < 30:
+        print(f"[{data_id}] `X_pca` only has {adata.obsm['X_pca'].shape[1]} dimensions. Recalculating with 30 comps...")
+        sc.pp.pca(adata, n_comps=30, random_state=seed)
+    
+    print(f"[{data_id}] Formatting PCA matrix to float64 to prevent downstream bugs...")
+    if 'X_pca' in adata.obsm:
+        adata.obsm['X_pca'] = adata.obsm['X_pca'].astype(np.float64)
 
     os.makedirs(os.path.join(args.results_dir, "figures", "umaps"), exist_ok=True)
     sc.settings.figdir = os.path.join(args.results_dir, "figures", "umaps")    
@@ -135,17 +142,17 @@ def process_h5ad(data_id, data_path, args):
             use_raw = args.use_raw,
             save = f"_{data_id}_global_data.png"
         )
+        
+        sc.pl.umap(
+            adata[adata.obs[args.cluster_header].isin(args.endo_labels)],
+            color = args.cluster_header,
+            frameon = False,
+            use_raw = args.use_raw,
+            save = f"_{data_id}_local_data.png"
+        )
     else:
         # we have neither tSNE nor UMAP so make UMAP
         print(f"[{data_id}] No `X_umap` is .obsm, calculating...")
-        if 'X_pca' in adata.obsm:
-            print("Checking pca matrix before calculating UMAP...")
-            if adata.obsm['X_pca'].shape[1] < 30:
-                print("`X_pca` does not have enough PCs. Rerunning `sc.pp.pca` with 30 comps.")
-                sc.pp.pca(adata, n_comps=30, random_state=seed)
-        else:
-            print(f"using `X_pca` with {adata.obsm['X_pca'].shape[1]} components to calculate UMAP embedding...")
-
         sc.pp.neighbors(adata, n_pcs=30, random_state=seed)
         sc.tl.umap(adata, n_components=30, random_state=seed)
         sc.set_figure_params(dpi=200)
@@ -155,20 +162,14 @@ def process_h5ad(data_id, data_path, args):
             color = args.cluster_header,
             frameon = False,
             use_raw = args.use_raw,
-            save = f"_{data_id}_global_data.png"
-        )
+            save = f"_{data_id}_global_data.png")
 
         sc.pl.umap(
             adata[adata.obs[args.cluster_header].isin(args.endo_labels)],
             color = args.cluster_header,
             frameon = False,
             use_raw = args.use_raw,
-            save = f"_{data_id}_local_data.png"
-        )
-        
-    print(f"[{data_id}] Formatting PCA matrix to float64 to prevent downstream bugs...")
-    if 'X_pca' in adata.obsm:
-        adata.obsm['X_pca'] = adata.obsm['X_pca'].astype(np.float64)
+            save = f"_{data_id}_local_data.png")
 
     os.makedirs(os.path.join(args.tmpdir, f'{data_id}_tmp_files', 'h5ads'), exist_ok=True)
     adata.write(os.path.join(args.tmpdir, f'{data_id}_tmp_files', 'h5ads', f'{data_id}_ingested.h5ad'))

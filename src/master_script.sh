@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --mem=150g # default
 #SBATCH --cpus-per-task=72 # default 
-#SBATCH --time=8:00:00 
+#SBATCH --time=12:00:00 
 #SBATCH --gres=lscratch:50 # default
 #SBATCH --job-name="NSForest_combined_markers" # default
 
