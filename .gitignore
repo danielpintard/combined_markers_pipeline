@@ -4,3 +4,5 @@ slurm*
 data/
 LungMap_CellRef_master_script.sh
 test*
+notebooks/
+docs/lab_notebook.md
