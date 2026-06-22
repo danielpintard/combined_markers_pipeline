@@ -26,6 +26,12 @@ def process_h5ad(data_id, data_path, args):
         print(f"{data_id} Error reading data: {e}")
         return
     
+    # needed to be added since in CellxGene, HLCA names this gene as "C7" but the downloaded h5ad that Ajith has for this dataset names this genes "C7_ENSG00000112936"
+    if data_id == 'HLCA_Core':
+        adata.var['feature_name'] = adata.var['feature_name'].cat.add_categories(['C7'])
+        adata.var.loc[adata.var['feature_name'] == 'C7_ENSG00000112936', 'feature_name'] = 'C7'
+        adata.var['feature_name'] = adata.var['feature_name'].cat.remove_unused_categories() 
+    
     if args.cxg:
         adata.var['ensembl_id'] = adata.var_names
         adata.var.index = adata.var['feature_name'].astype(str)
