@@ -110,4 +110,3 @@ python py_scripts/get_markers_and_eval.py \
 
 echo "" >> "$RUN_LOG"
 echo "Pipeline complete at $(date)" >> "$RUN_LOG"
-
