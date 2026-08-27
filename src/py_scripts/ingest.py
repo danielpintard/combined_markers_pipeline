@@ -1,4 +1,16 @@
-## CONFIG
+"""
+As a practise, I am gonna tag new function I write with their SCOPE to indicate the logical bounds of that function.
+The categories of SCOPE are: 
+1) THIS SCRIPT - this function can only be used in this script file, i.e. it is virtually \
+unusable in any other script and would require a considerable rewrite to be useable in another script
+2) THIS PROJ - this function's scope of utility is bounded by this project's directory structure, and can be reused in other scripts in this directory
+3) GLOBAL - these are functions that can be trivially used in other scripts. These functions can be imported into another script, used and cause no \
+    errors with proper usage. Functions that can be reused in other projects via copy+paste, should only require one or few minimal changes to be \
+    reused in a codebase
+"""
+
+
+## CONFIG START
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -15,6 +27,124 @@ import os
 import gc
 
 seed = 42 
+## CONFIG END
+
+###### FUNCTION DEFINITIONS START ######
+
+def resolve_var_names(adata: ad.AnnData, data_id: str, cxg: bool):
+    # SCOPE : THIS PROJ
+    """\
+    Ensures adata.var.index (aliased as adata.var_names) contains gene symbols. This function is \
+    particularly useful when working with adata objects sourced from CellxGene. Also has to deal with \
+    renaming "C7_ENSG00000112936" to "C7" in `HLCA_Core`'s adata.var['feature_name']
+
+    Parameters
+    ----------
+        adata: ad.AnnData
+            Annotated data matrix.
+        cxg: bool
+            Indicate whether the AnnData object was sourced from CellxGene data portal.
+    Returns
+    -------
+    adata: ad.AnnData
+        AnnData object with HGNC gene symbols as indices in .var_names.
+    """
+    # needed to be added since in CellxGene, HLCA names this gene as "C7" but the downloaded h5ad that Ajith has for this 
+    # dataset names this genes "C7_ENSG00000112936"
+    if data_id == 'HLCA_Core':
+        adata.var['feature_name'] = adata.var['feature_name'].cat.add_categories(['C7'])
+        adata.var.loc[adata.var['feature_name'] == 'C7_ENSG00000112936', 'feature_name'] = 'C7'
+        adata.var['feature_name'] = adata.var['feature_name'].cat.remove_unused_categories() 
+    
+    if cxg:
+        adata.var['ensembl_id'] = adata.var_names
+        adata.var.index = adata.var['feature_name'].astype(str)
+        adata.var_names_make_unique()
+        adata.var.index.name = None
+    elif var_col == "NONE":
+        adata.var_names = adata.var_names
+    else:
+        var_col = var_col
+        adata.var.index = adata.var[var_col].astype(str)
+    
+    return adata
+
+def check_X_transformation(adata):
+    """\
+        Checks adata.X to ensure it has been transformed using scanpy.pp.normalize_total(target_sum=1e4) and scanpy.pp.log1p()
+    
+        Parameters
+        ----------
+            adata: ad.AnnData
+                Annotated data matrix.
+        Returns
+        -------
+        adata: ad.AnnData
+            AnnData object with a .X that has been validated or transformed. 
+        """
+        
+    # subset adata.X, densify it and check if the values in it are integers 
+    ds_X = adata.X[:100].copy()
+    ds_arr = ds_X.toarray() if sp.issparse(ds_X) else ds_X
+    is_integer = np.allclose(ds_arr, np.round(ds_arr), rtol=1e-5, atol=1e-5)
+    max_val = ds_arr.max()
+
+    ## conduct heuristic and metadata checks
+    if 'log1p' in adata.uns:
+        print("Metadata Check: Found 'log1p' in adata.uns. Data is already transformed.")
+    elif (not is_integer) and max_val < 30: # if matrix is not raw counts and max value less than 30, then it is already transformed
+        print(f"Heuristic Check: 'log1p' metadata missing, but data appears transformed (contains floats, max={max_val:.2f}). Skipping.")
+    else:
+        print(f"Heuristic Check: Data appears not to be transformed (contains ints)")
+        print('Transforming data...')
+        sc.pp.normalize_total(adata, target_sum=1e4)
+        sc.pp.log1p(adata)
+    
+    return adata
+
+def balance_clusterSizes(adata: ad.AnnData, balance_groups: bool, n_cells_to_keep: int = None, 
+    standard_ds: bool = None, meet_at_value: bool = None):
+
+    if balance_groups and n_cells_to_keep:
+        subset = adata.obs[adata.obs[cluster_header].isin(endo_labels)]
+        non_endo_indices = adata.obs[~adata.obs[cluster_header].isin(endo_labels)].index.tolist()
+    
+    if meet_at_value:
+        def meet_target(group):
+            if len(group) == 0:
+                return group
+            elif len(group) < n_cells_to_keep:
+                return group.sample(n=n_cells_to_keep, replace=True, random_state=seed)
+            else:
+                return group.sample(n=n_cells_to_keep, replace=False, random_state=seed)
+
+        sampled_endo = subset.groupby(cluster_header, observed=True, group_keys=False).apply(meet_target)
+        sampled_endo_indices = sampled_endo.index.tolist()
+
+    elif standard_ds:
+        def standard_downsample(group):
+            if len(group) > n_cells_to_keep:
+                return group.sample(n=n_cells_to_keep, replace=False, random_state=seed)
+            else:
+                return group
+        
+        sampled_endo = subset.groupby(cluster_header, observed=True, group_keys=False).apply(standard_downsample)
+        sampled_endo_indices = sampled_endo.index.tolist()
+    else:
+        print("Please specify a group balancing strategy: `meet_at_value` or `standard_ds`")
+        sampled_endo_indices = subset.index.tolist()
+    
+    if meet_at_value:
+        # gotta make obs_names unique since cells are being duplicated
+        all_kept_idx = sampled_endo_indices + non_endo_indices
+        adata = adata[all_kept_idx].copy()
+        adata.obs_names_make_unique()
+    else:
+        # ensuring we maintain order of
+        all_kept_set = set(sampled_endo_indices + non_endo_indices)        
+        ordered_kept_idx = [idx for idx in adata.obs_names if idx in all_kept_set]
+        adata = adata[ordered_kept_idx].copy()
+
 
 def process_h5ad(data_id, data_path, args):
     
@@ -26,84 +156,18 @@ def process_h5ad(data_id, data_path, args):
         print(f"{data_id} Error reading data: {e}")
         return
     
-    # needed to be added since in CellxGene, HLCA names this gene as "C7" but the downloaded h5ad that Ajith has for this dataset names this genes "C7_ENSG00000112936"
-    if data_id == 'HLCA_Core':
-        adata.var['feature_name'] = adata.var['feature_name'].cat.add_categories(['C7'])
-        adata.var.loc[adata.var['feature_name'] == 'C7_ENSG00000112936', 'feature_name'] = 'C7'
-        adata.var['feature_name'] = adata.var['feature_name'].cat.remove_unused_categories() 
-    
-    if args.cxg:
-        adata.var['ensembl_id'] = adata.var_names
-        adata.var.index = adata.var['feature_name'].astype(str)
-        adata.var_names_make_unique()
-        adata.var.index.name = None
-    elif args.var_col == "NONE":
-        var_col = adata.var_names
-    else:
-        var_col = args.var_col
-        adata.var.index = adata.var[var_col].astype(str)
+    ## DEALS WITH adata.var_names
+    adata = resolve_var_names(adata, data_id, args.cxg) # not sure if argparse is still gonna be used when implementing nextflow layers
 
     ## HANDLING MISSING ANNOTATIONS
     print(f"Cleaning missing annotations in {args.cluster_header}...")
     adata.obs[args.cluster_header] = adata.obs[args.cluster_header].astype(object).fillna("Unknown").astype(str).astype('category')
 
-    # NOTE: UPDATED CODE FOR CHECKING IF adata.X HAS BEEN TRANFORMED ALREADY
     ## CHECK .X TO SEE IF ITS TRANSFORMED ALREADY
-    ds_X = adata.X[:100].copy()
-    ds_arr = ds_X.toarray() if sp.issparse(ds_X) else ds_X
-    is_integer = np.allclose(ds_arr, np.round(ds_arr), rtol=1e-5, atol=1e-5)
-    max_val = ds_arr.max()
-
-    if 'log1p' in adata.uns:
-        print("Metadata Check: Found 'log1p' in adata.uns. Data is already transformed.")
-    elif (not is_integer) and max_val < 30: # if matrix is not raw counts andmax value less than 30, then it is transformed
-        print(f"Heuristic Check: 'log1p' metadata missing, but data appears transformed (contains floats, max={max_val:.2f}). Skipping.")
-    else:
-        print(f"Heuristic Check: Data appears not to be transformed (contains ints)")
-        print('Transforming data...')
-        sc.pp.normalize_total(adata, target_sum=1e4)
-        sc.pp.log1p(adata)
+    adata = check_X_transformation(adata)
 
     ## IMPLEMENT DIFFERENT GROUP BALANCING STRATEGIES AMONGST CELL TYPE CLASS OF INTEREST
-    if args.balance_groups and args.n_cells_to_keep:
-        subset = adata.obs[adata.obs[args.cluster_header].isin(args.endo_labels)]
-        non_endo_indices = adata.obs[~adata.obs[args.cluster_header].isin(args.endo_labels)].index.tolist()
-        
-        if args.meet_at_value:
-            def meet_target(group):
-                if len(group) == 0:
-                    return group
-                elif len(group) < args.n_cells_to_keep:
-                    return group.sample(n=args.n_cells_to_keep, replace=True, random_state=seed)
-                else:
-                    return group.sample(n=args.n_cells_to_keep, replace=False, random_state=seed)
-
-            sampled_endo = subset.groupby(args.cluster_header, observed=True, group_keys=False).apply(meet_target)
-            sampled_endo_indices = sampled_endo.index.tolist()
-
-        elif args.standard_ds:
-            def standard_downsample(group):
-                if len(group) > args.n_cells_to_keep:
-                    return group.sample(n=args.n_cells_to_keep, replace=False, random_state=seed)
-                else:
-                    return group
-            
-            sampled_endo = subset.groupby(args.cluster_header, observed=True, group_keys=False).apply(standard_downsample)
-            sampled_endo_indices = sampled_endo.index.tolist()
-        else:
-            print("Please specify a group balancing strategy: `meet_at_value` or `standard_ds`")
-            sampled_endo_indices = subset.index.tolist()
-        
-        if args.meet_at_value:
-            # gotta make obs_names unique since cells are being duplicated
-            all_kept_idx = sampled_endo_indices + non_endo_indices
-            adata = adata[all_kept_idx].copy()
-            adata.obs_names_make_unique()
-        else:
-            # ensuring we maintain order of
-            all_kept_set = set(sampled_endo_indices + non_endo_indices)        
-            ordered_kept_idx = [idx for idx in adata.obs_names if idx in all_kept_set]
-            adata = adata[ordered_kept_idx].copy()
+    
 
 
     # CHECK IF ADATA HAS PRECOMPUTED PCA SPACE
@@ -228,5 +292,8 @@ def main():
 
     process_h5ad(args.data_id, args.data_path, args)
         
+###### FUNCTION DEFINITIONS END ######
+
+
 if __name__ == "__main__":
     main()
