@@ -48,6 +48,7 @@ workflow {
 
     Channel
         .fromPath(params.samplesheet)
+        .ifEmpty { exit 1, "Cannot find sample sheet TSV: ${params.samplesheet}"}
         .splitCsv(header: true, sep: '\t')
         .map { row ->
             tuple(
