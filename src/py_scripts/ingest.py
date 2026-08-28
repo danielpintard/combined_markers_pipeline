@@ -26,7 +26,7 @@ import scipy.sparse as sp
 import os
 import gc
 
-seed = 42 
+seed = 42 # NOTE:seed passing should probably happen higher up in the program architecture, maybe included in params config file or something like that
 ## CONFIG END
 
 ###### FUNCTION DEFINITIONS START ######
@@ -34,21 +34,19 @@ seed = 42
 def resolve_var_names(adata: ad.AnnData, data_id: str, cxg: bool):
     # SCOPE : THIS PROJ
     """\
-    Ensures adata.var.index (aliased as adata.var_names) contains gene symbols. This function is \
-    particularly useful when working with adata objects sourced from CellxGene. Also has to deal with \
-    renaming "C7_ENSG00000112936" to "C7" in `HLCA_Core`'s adata.var['feature_name']
+        Ensures adata.var.index (aliased as adata.var_names) contains gene symbols. This function is \
+        particularly useful when working with adata objects sourced from CellxGene. Also has to deal with \
+        renaming "C7_ENSG00000112936" to "C7" in `HLCA_Core`'s adata.var['feature_name']
 
-    Parameters
-    ----------
-        adata: ad.AnnData
-            Annotated data matrix.
-        cxg: bool
-            Indicate whether the AnnData object was sourced from CellxGene data portal.
-    Returns
-    -------
-    adata: ad.AnnData
-        AnnData object with HGNC gene symbols as indices in .var_names.
+    Args:
+        adata (ad.AnnData): Annotated data matrix.
+        data_id (str): String used to identify the dataset.
+        cxg (bool): Indicate whether the AnnData object was sourced from CellxGene data portal.
+
+    Returns:
+        ad.AnnData: AnnData object with HGNC gene symbols as indices in .var_names.
     """
+    
     # needed to be added since in CellxGene, HLCA names this gene as "C7" but the downloaded h5ad that Ajith has for this 
     # dataset names this genes "C7_ENSG00000112936"
     if data_id == 'HLCA_Core':
@@ -72,16 +70,13 @@ def resolve_var_names(adata: ad.AnnData, data_id: str, cxg: bool):
 def check_X_transformation(adata):
     """\
         Checks adata.X to ensure it has been transformed using scanpy.pp.normalize_total(target_sum=1e4) and scanpy.pp.log1p()
-    
-        Parameters
-        ----------
-            adata: ad.AnnData
-                Annotated data matrix.
-        Returns
-        -------
-        adata: ad.AnnData
-            AnnData object with a .X that has been validated or transformed. 
-        """
+
+    Args:
+        adata (ad.AnnData): Annotated data matrix.
+
+    Returns:
+        ad.AnnData: AnnData object with a .X that has been validated or transformed.
+    """
         
     # subset adata.X, densify it and check if the values in it are integers 
     ds_X = adata.X[:100].copy()
@@ -102,52 +97,119 @@ def check_X_transformation(adata):
     
     return adata
 
-def balance_clusterSizes(adata: ad.AnnData, balance_groups: bool, n_cells_to_keep: int = None, 
-    standard_ds: bool = None, meet_at_value: bool = None):
+### clusterSize balancing related functions. These might get put into a utils directory.
+def meet_target(group: pd.DataFrame, n_obs_to_keep: int, seed: int):
+    # SCOPE: GLOBAL
+    """_summary_
 
-    if balance_groups and n_cells_to_keep:
-        subset = adata.obs[adata.obs[cluster_header].isin(endo_labels)]
-        non_endo_indices = adata.obs[~adata.obs[cluster_header].isin(endo_labels)].index.tolist()
-    
-    if meet_at_value:
-        def meet_target(group):
-            if len(group) == 0:
-                return group
-            elif len(group) < n_cells_to_keep:
-                return group.sample(n=n_cells_to_keep, replace=True, random_state=seed)
-            else:
-                return group.sample(n=n_cells_to_keep, replace=False, random_state=seed)
+    Args:
+        group (pd.DataFrame): _description_
+        n_obs_to_keep (int): _description_
+        seed (int): _description_
 
-        sampled_endo = subset.groupby(cluster_header, observed=True, group_keys=False).apply(meet_target)
-        sampled_endo_indices = sampled_endo.index.tolist()
-
-    elif standard_ds:
-        def standard_downsample(group):
-            if len(group) > n_cells_to_keep:
-                return group.sample(n=n_cells_to_keep, replace=False, random_state=seed)
-            else:
-                return group
-        
-        sampled_endo = subset.groupby(cluster_header, observed=True, group_keys=False).apply(standard_downsample)
-        sampled_endo_indices = sampled_endo.index.tolist()
+    Returns:
+        _type_: _description_
+    """
+    if len(group) == 0:
+        return group
+    elif len(group) < n_obs_to_keep:
+        return group.sample(n=n_obs_to_keep, replace=True, random_state=seed)
     else:
-        print("Please specify a group balancing strategy: `meet_at_value` or `standard_ds`")
-        sampled_endo_indices = subset.index.tolist()
-    
-    if meet_at_value:
-        # gotta make obs_names unique since cells are being duplicated
-        all_kept_idx = sampled_endo_indices + non_endo_indices
-        adata = adata[all_kept_idx].copy()
-        adata.obs_names_make_unique()
-    else:
-        # ensuring we maintain order of
-        all_kept_set = set(sampled_endo_indices + non_endo_indices)        
-        ordered_kept_idx = [idx for idx in adata.obs_names if idx in all_kept_set]
-        adata = adata[ordered_kept_idx].copy()
+        return group.sample(n=n_obs_to_keep, replace=False, random_state=seed)
 
+def standard_downsample(group, n_obs_to_keep: int, seed: int):
+    """_summary_
+
+    Args:
+        group (_type_): _description_
+        n_obs_to_keep (int): _description_
+        seed (int): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    if len(group) > n_obs_to_keep:
+        return group.sample(n=n_obs_to_keep, replace=False, random_state=seed)
+    else:
+        return group
+
+def balance_clusterSizes(adata: ad.AnnData, cluster_header: str, balance_groups: bool, cluster_labels: list, n_cells_to_keep: int = None, 
+    standard_ds: bool = None, meet_at_value: bool = None, seed: int = seed):
+    # SCOPE: GLOBAL (potentially)
+    """_summary_
+
+    Args:
+        adata (ad.AnnData): _description_
+        cluster_header (str): _description_
+        balance_groups (bool): _description_
+        cluster_labels (list): _description_
+        n_cells_to_keep (int, optional): _description_. Defaults to None.
+        standard_ds (bool, optional): _description_. Defaults to None.
+        meet_at_value (bool, optional): _description_. Defaults to None.
+        seed (int, optional): _description_. Defaults to seed.
+
+    Returns:
+        _type_: _description_
+    """
+    
+    # wont look pretty but I'm gonna write a nasty nested conditional and even though it won't be the most readable, but I think logically, it is the best option here for 
+    # compartmentalizing different functionality for different use cases
+    
+    # TODO:
+    # [ ] implement logic for automatically calculating n_cells_to_keep
+    # [ ] implement logic for doing group balancing across all cell types
+
+    if balance_groups:
+        if not n_cells_to_keep: # if user does not pass in a value, then automatically determine n_cells_to_keep
+            if meet_at_value: n_cells_to_keep = "" # find n_cells_to_keep by getting lowest n cluster in cluster_header, take that number, x1.5
+            elif standard_ds: n_cells_to_keep = "" # find n_cells_to_keep by getting lowest n cluster in cluster_header
+        if cluster_labels:
+            print(f"Balancing clusterSizes amongst selected `cluster_labels` in adata.obs[`{cluster_header}`]")
+            subset = adata.obs[adata.obs[cluster_header].isin(cluster_labels)]
+            non_endo_indices = adata.obs[~adata.obs[cluster_header].isin(cluster_labels)].index.tolist()
+            if meet_at_value:
+                print(f"`meet_at_value` sampling strategy. Clusters in adata.obs[`{cluster_header}`] > {n_cells_to_keep} downsampled and clusters < {n_cells_to_keep} upsampled.")
+                sampled_endo = subset.groupby(cluster_header, observed=True, group_keys=False).apply(meet_target, 
+                                                                                                        n_obs_to_keep = n_cells_to_keep, 
+                                                                                                        seed = seed)
+                sampled_endo_indices = sampled_endo.index.tolist()
+                all_kept_idx = sampled_endo_indices + non_endo_indices
+                adata = adata[all_kept_idx].copy()
+                adata.obs_names_make_unique() # gotta make obs_names unique since cells are being duplicated
+            elif standard_ds:
+                print(f"`standard_ds` sampling strategy. Clusters in adata.obs[`{cluster_header}`] > {n_cells_to_keep} downsampled.")
+                sampled_endo = subset.groupby(cluster_header, observed=True, group_keys=False).apply(standard_downsample,
+                                                                                                     n_obs_to_keep = n_cells_to_keep,
+                                                                                                     seed = seed)
+                sampled_endo_indices = sampled_endo.index.tolist()
+                all_kept_set = set(sampled_endo_indices + non_endo_indices)        
+                ordered_kept_idx = [idx for idx in adata.obs_names if idx in all_kept_set] # ensure we maintain the original order of the matrix
+                adata = adata[ordered_kept_idx].copy()
+            else: # error handling for missing param, this should kill this whole script
+                print("Please specify a group balancing strategy: `meet_at_value` or `standard_ds`")
+                sampled_endo_indices = subset.index.tolist()
+                
+        else: 
+            print(f"Balancing clusterSizes amongst all clusters in adata.obs[`{cluster_header}`]")
+            if meet_at_value:
+                grouped_ad_idx = adata.obs[cluster_header].groupby(cluster_header, obserbved = True, group_keys=False).apply(standard_downsample,
+                                                                                                                                         n_obs_to_keep = n_cells_to_keep,
+                                                                                                                                         seed = seed).index.tolist()
+                all_kept_set = set(grouped_ad_idx)        
+                adata = adata[all_kept_set].copy()
+            else:
+                grouped_ad_idx = adata.obs[cluster_header].groupby(cluster_header, obserbved = True, group_keys=False).apply(standard_downsample,
+                                                                                                                         n_obs_to_keep = n_cells_to_keep,
+                                                                                                                         seed = seed).index.tolist()
+                all_kept_set = set(grouped_ad_idx)        
+                ordered_kept_idx = [idx for idx in adata.obs_names if idx in all_kept_set] # ensure we maintain the original order of the matrix
+                adata = adata[ordered_kept_idx].copy()
+    else:
+        print("`balance_groups` set to `False`. adata object remains unchanged")
+        return adata
 
 def process_h5ad(data_id, data_path, args):
-    
+    # SCOPE: THIS PROJ
     print(f"\nStarting ingestion of {data_id} from {data_path}")
     
     try:
@@ -168,7 +230,6 @@ def process_h5ad(data_id, data_path, args):
 
     ## IMPLEMENT DIFFERENT GROUP BALANCING STRATEGIES AMONGST CELL TYPE CLASS OF INTEREST
     
-
 
     # CHECK IF ADATA HAS PRECOMPUTED PCA SPACE
     if "X_pca" not in adata.obsm:
