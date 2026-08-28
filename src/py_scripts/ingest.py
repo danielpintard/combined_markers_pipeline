@@ -31,7 +31,7 @@ seed = 42 # NOTE:seed passing should probably happen higher up in the program ar
 
 ###### FUNCTION DEFINITIONS START ######
 
-def resolve_var_names(adata: ad.AnnData, data_id: str, cxg: bool):
+def resolve_var_names(adata: ad.AnnData, data_id: str, cxg: bool, var_col: str):
     # SCOPE : THIS PROJ
     """\
         Ensures adata.var.index (aliased as adata.var_names) contains gene symbols. This function is \
@@ -67,6 +67,26 @@ def resolve_var_names(adata: ad.AnnData, data_id: str, cxg: bool):
     
     return adata
 
+def validate_cluster_labels(adata: ad.AnnData, cluster_header: str, cluster_labels: list):
+    # SCOPE: GLOBAL
+    """_summary_
+
+    Args:
+        adata (ad.AnnData): _description_
+        cluster_header (str): _description_
+        cluster_labels (list): _description_
+
+    Raises:
+        ValueError: _description_
+    """
+    present = set(adata.obs[cluster_header].unique())
+    missing = [lab for lab in cluster_labels if lab not in present]
+    if missing:
+        raise ValueError(
+            f"Cluster label(s) not found in adata.obs['{cluster_header}']: {missing}. "
+            f"Check the labels provided in the sample sheet against this dataset."
+        )
+
 def check_X_transformation(adata):
     """\
         Checks adata.X to ensure it has been transformed using scanpy.pp.normalize_total(target_sum=1e4) and scanpy.pp.log1p()
@@ -79,7 +99,7 @@ def check_X_transformation(adata):
     """
         
     # subset adata.X, densify it and check if the values in it are integers 
-    ds_X = adata.X[:100].copy()
+    ds_X = adata.X[:100].copy() # NOTE: consider making this a random sampling of the matrix rather than just the first 100 rows
     ds_arr = ds_X.toarray() if sp.issparse(ds_X) else ds_X
     is_integer = np.allclose(ds_arr, np.round(ds_arr), rtol=1e-5, atol=1e-5)
     max_val = ds_arr.max()
@@ -192,13 +212,13 @@ def balance_clusterSizes(adata: ad.AnnData, cluster_header: str, balance_groups:
         else: 
             print(f"Balancing clusterSizes amongst all clusters in adata.obs[`{cluster_header}`]")
             if meet_at_value:
-                grouped_ad_idx = adata.obs[cluster_header].groupby(cluster_header, obserbved = True, group_keys=False).apply(standard_downsample,
-                                                                                                                                         n_obs_to_keep = n_cells_to_keep,
-                                                                                                                                         seed = seed).index.tolist()
+                grouped_ad_idx = adata.obs[cluster_header].groupby(cluster_header, observed = True, group_keys=False).apply(meet_target,
+                                                                                                                            n_obs_to_keep = n_cells_to_keep,
+                                                                                                                            seed = seed).index.tolist()
                 all_kept_set = set(grouped_ad_idx)        
                 adata = adata[all_kept_set].copy()
             else:
-                grouped_ad_idx = adata.obs[cluster_header].groupby(cluster_header, obserbved = True, group_keys=False).apply(standard_downsample,
+                grouped_ad_idx = adata.obs[cluster_header].groupby(cluster_header, observed = True, group_keys=False).apply(standard_downsample,
                                                                                                                          n_obs_to_keep = n_cells_to_keep,
                                                                                                                          seed = seed).index.tolist()
                 all_kept_set = set(grouped_ad_idx)        
@@ -210,12 +230,23 @@ def balance_clusterSizes(adata: ad.AnnData, cluster_header: str, balance_groups:
     
 def check_dimreds(adata: ad.AnnData, seed: int = seed):
     # SCOPE: GLOBAL
-    
-    if ("X_pca" in adata.obsm | "pca" in adata.obsm) and (adata.obsm['X_pca'].shape[1] > 30):
+    """_summary_
+
+    Args:
+        adata (ad.AnnData): _description_
+        seed (int, optional): _description_. Defaults to seed.
+
+    Returns:
+        _type_: _description_
+    """
+    if ("X_pca" in adata.obsm) and (adata.obsm['X_pca'].shape[1] > 30):
         print(f"adata contains viable PCA embedding with > 30 PCs")
         adata.obsm['X_pca'] = adata.obsm['X_pca'].astype(np.float64) # Formatting PCA matrix to float64 to prevent downstream bugs
+    elif ("pca" in adata.obsm) and (adata.obsm['pca'].shape[1] > 30):
+        print(f"adata contains viable PCA embedding with > 30 PCs")
+        adata.obsm['pca'] = adata.obsm['pca'].astype(np.float64) # Formatting PCA matrix to float64 to prevent downstream bugs
     else:
-        print("No `X_pca` in adata.obsm, calculating...")
+        print("No `X_pca`(scanpy) or `pca`(Seurat) in adata.obsm, calculating...")
         sc.pp.pca(adata, n_comps=30, random_state=seed)
         adata.obsm['X_pca'] = adata.obsm['X_pca'].astype(np.float64)
            
@@ -245,6 +276,11 @@ def process_h5ad(data_id, data_path,
                  args # still don't know if args are gonna be passed here
                  ):
     # SCOPE: THIS PROJ
+    """_summary_
+
+    Args:
+        data_id (_type_): _description_
+    """
     print(f"\nStarting ingestion of {data_id} from {data_path}")
     
     try:
@@ -254,11 +290,13 @@ def process_h5ad(data_id, data_path,
         return
     
     ## DEALS WITH adata.var_names
-    adata = resolve_var_names(adata, data_id, args.cxg) # not sure if argparse is still gonna be used when implementing nextflow layers
+    adata = resolve_var_names(adata, data_id, args.cxg, args.var_col) # not sure if argparse is still gonna be used when implementing nextflow layers
 
     ## HANDLING MISSING ANNOTATIONS
     print(f"Cleaning missing annotations in {args.cluster_header}...")
     adata.obs[args.cluster_header] = adata.obs[args.cluster_header].astype(object).fillna("Unknown").astype(str).astype('category')
+    
+    validate_cluster_labels(adata=adata, cluster_header=args.cluster_header, cluster_labels=args.cluster_labels)
 
     ## CHECK .X TO SEE IF ITS TRANSFORMED ALREADY
     adata = check_X_transformation(adata)
@@ -271,22 +309,29 @@ def process_h5ad(data_id, data_path,
                                  # else I should factor into the experiment I plan to do with comparing the impact of clusterSize balancing on quality of marker gene discovery.
                                  )
     
-    # [x] TODO: make a decision as to whether or not plotting logic for dim reductions should be stored in check_dimreds().
-    # As on now (10:47 AM 08/28/2026) I am leaning towards having the function select a dim reduction and return it and then just use sc.pl.embeddings to plot whichever one is chosen,
-    # also just a quick note, see if I can customize the plot so that only left and bottom axes are show for dim reduction (and see if the length/height of axes can be shortened and arrows added to the end of them)
-    
     adata, dim_red = check_dimreds(adata=adata, seed=seed)
     
-    # [x] TODO: delete all of the conditional plotting logic below and replace with sc.pl.embedding that used dim_red as basis
     if dim_red:
+        os.makedirs(os.path.join(args.results_dir, "figures", "embeddings"), exist_ok=True)
+        sc.settings.figdir = os.path.join(args.results_dir, "figures", "embeddings")    
+        sc.set_figure_params(dpi=200)
         sc.pl.embedding(
-            
+            adata,
+            basis = dim_red,
+            color = args.cluster_header,
+            frameon = True,
+            use_raw = False,
+            save = f"_{data_id}_global_data.png"
         )
         
         sc.pl.embedding(
-            
+            adata[adata.obs[args.cluster_header].isin(args.cluster_labels)],
+            basis = dim_red,
+            color = args.cluster_header,
+            frameon = True,
+            use_raw = False,
+            save = f"_{data_id}_local_data.png"
         )
-    
 
     os.makedirs(os.path.join(args.tmpdir, f'{data_id}_tmp_files', 'h5ads'), exist_ok=True)
     adata.write(os.path.join(args.tmpdir, f'{data_id}_tmp_files', 'h5ads', f'{data_id}_ingested.h5ad'))
@@ -308,7 +353,7 @@ def main():
     parser.add_argument("--cxg", action="store_true", help="Indicate whether or not data is sourced from CellxGene. Omit if data not from CellxGene. This is to deal with how CellxGene organizes their adata.var")
     parser.add_argument("--var_col", type=str, default="", help="Column in adata.var where gene symbols are held")
     parser.add_argument("--use_raw", action="store_false", help="Flag to use adata.raw for plotting umap")
-    parser.add_argument("--endo_labels", type=str, nargs='+', required=True, help="Array of endothelial labels")
+    parser.add_argument("--cluster_labels", type=str, nargs='+', required=True, help="Array of cluster labels that compose your local data of interest. Could represent a lineage/compartment or a certain biologically relevant grouping of cells.")
     parser.add_argument("--balance_groups", action="store_true", help="Whether or not to balance group sizes of endothelial cells to the lowest represented group")
     parser.add_argument("--meet_at_value", action="store_true")
     parser.add_argument("--standard_ds", action="store_true")
@@ -316,31 +361,8 @@ def main():
 
     args = parser.parse_args()
 
-    ## LIKELY DEPRECATED - SAMPLE SHEET READING LOGIC HANDLED BY BASH NOW 
-    ## LOGIC FOR READING IN AND PROCESSING SAMPLE SHEET FOR HANDLING MULTPILE DATA SETS
-    # if args.sample_sheet is None:
-    #     if args.data_id is None or args.data_path is None:
-    #         parser.error("You must provide either --sample_sheet OR both --data_id and --data_path")
-        
-    #     process_h5ad(args.data_id, args.data_path, args)
-        
-    # else:
-    #     print(f"Reading sample sheet: {args.sample_sheet}")
-    #     try:
-    #         df = pd.read_csv(args.sample_sheet)
-    #     except Exception as e:
-    #         raise RuntimeError(f"Could not read sample sheet: {e}")
-            
-    #     if 'data_id' not in df.columns or 'data_path' not in df.columns:
-    #         raise ValueError("Sample sheet must contain 'data_id' and 'data_path' columns.")
-
-    #     for _, row in df.iterrows():
-    #         process_h5ad(row['data_id'], row['data_path'], args)
-
     process_h5ad(args.data_id, args.data_path, args)
-        
 ###### FUNCTION DEFINITIONS END ######
-
 
 if __name__ == "__main__":
     main()
