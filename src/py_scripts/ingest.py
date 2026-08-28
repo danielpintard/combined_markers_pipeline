@@ -161,9 +161,9 @@ def balance_clusterSizes(adata: ad.AnnData, cluster_header: str, balance_groups:
 
     if balance_groups:
         if not n_cells_to_keep: # if user does not pass in a value, then automatically determine n_cells_to_keep
-            if meet_at_value: n_cells_to_keep = "" # find n_cells_to_keep by getting lowest n cluster in cluster_header, take that number, x1.5
-            elif standard_ds: n_cells_to_keep = "" # find n_cells_to_keep by getting lowest n cluster in cluster_header
-        if cluster_labels:
+            if meet_at_value: n_cells_to_keep = "" # TODO find n_cells_to_keep by getting lowest n cluster in cluster_header, take that number, x1.5
+            elif standard_ds: n_cells_to_keep = "" # TODO find n_cells_to_keep by getting lowest n cluster in cluster_header
+        if cluster_labels: # if we only do bal
             print(f"Balancing clusterSizes amongst selected `cluster_labels` in adata.obs[`{cluster_header}`]")
             subset = adata.obs[adata.obs[cluster_header].isin(cluster_labels)]
             non_endo_indices = adata.obs[~adata.obs[cluster_header].isin(cluster_labels)].index.tolist()
@@ -207,8 +207,36 @@ def balance_clusterSizes(adata: ad.AnnData, cluster_header: str, balance_groups:
     else:
         print("`balance_groups` set to `False`. adata object remains unchanged")
         return adata
+    
+def check_dimreds(adata: ad.AnnData, data_id: str, seed: int = seed):
+    # check PCA space presence and dims
+    # check UMAP presence
+    # check tSNE presence
+    # CHECK IF ADATA HAS PRECOMPUTED PCA SPACE
+    # [ ] TODO: REFACTOR
+    #   [ ] give priority for identifying dim reduction keys produced by Seurat and Scanpy and those that could be found in cellxgene
+    #       then use regex to identify any other possible keys used for dim reductions
+    if "X_pca" not in adata.obsm:
+        print("No `X_pca` in .obsm, calculating...")
+        sc.pp.pca(adata, n_comps=30, random_state=seed)
+    elif adata.obsm['X_pca'].shape[1] < 30:
+        print(f"[{data_id}] `X_pca` only has {adata.obsm['X_pca'].shape[1]} dimensions. Recalculating with 30 comps...")
+        sc.pp.pca(adata, n_comps=30, random_state=seed)
+    
+    print(f"[{data_id}] Formatting PCA matrix to float64 to prevent downstream bugs...")
+    if 'X_pca' in adata.obsm:
+        adata.obsm['X_pca'] = adata.obsm['X_pca'].astype(np.float64)
+    
+    dim_red = ""
+        
+    # print what dimension reductions are in this object
+    
+    return adata, dim_red
 
-def process_h5ad(data_id, data_path, args):
+
+def process_h5ad(data_id, data_path, 
+                 args # still don't know if args are gonna be passed here
+                 ):
     # SCOPE: THIS PROJ
     print(f"\nStarting ingestion of {data_id} from {data_path}")
     
@@ -229,78 +257,74 @@ def process_h5ad(data_id, data_path, args):
     adata = check_X_transformation(adata)
 
     ## IMPLEMENT DIFFERENT GROUP BALANCING STRATEGIES AMONGST CELL TYPE CLASS OF INTEREST
+    adata = balance_clusterSizes(adata, cluster_header=args.cluster_header, 
+                                 balance_groups=False # currently set to False until balance_groups logic is fixed. Also need to figure out if balancing amongst provided cluster_labels is a worthwhile implementation
+                                 # or if I should only include logic for downsampling across the board. We know that proportionality of clusterSizes impact the quality of clusters, and balancing them returns more 
+                                 # biologically representative results. This is convincing me that we should only contain logic for downsampling all clusters (if they exceed n_cells_to_keep). I think this is something 
+                                 # else I should factor into the experiment I plan to do with comparing the impact of clusterSize balancing on quality of marker gene discovery.
+                                 )
+    # [ ] TODO: make a decision as to whether or not plotting logic for dim reductions should be stored in check_dimreds().
+    # As on now (10:47 AM 08/28/2026) I am leaning towards having the function select a dim reduction and return it and then just use sc.pl.embeddings to plot whichever one is chosen,
+    # also just a quick note, see if I can customize the plot so that only left and bottom axes are show for dim reduction (and see if the length/height of axes can be shortened and arrows added to the end of them)
     
-
-    # CHECK IF ADATA HAS PRECOMPUTED PCA SPACE
-    if "X_pca" not in adata.obsm:
-        print("No `X_pca` in .obsm, calculating...")
-        sc.pp.pca(adata, n_comps=30, random_state=seed)
-    elif adata.obsm['X_pca'].shape[1] < 30:
-        print(f"[{data_id}] `X_pca` only has {adata.obsm['X_pca'].shape[1]} dimensions. Recalculating with 30 comps...")
-        sc.pp.pca(adata, n_comps=30, random_state=seed)
+    adata, dim_red = check_dimreds()
     
-    print(f"[{data_id}] Formatting PCA matrix to float64 to prevent downstream bugs...")
-    if 'X_pca' in adata.obsm:
-        adata.obsm['X_pca'] = adata.obsm['X_pca'].astype(np.float64)
-
-    os.makedirs(os.path.join(args.results_dir, "figures", "umaps"), exist_ok=True)
-    sc.settings.figdir = os.path.join(args.results_dir, "figures", "umaps")    
-
-    if ("X_umap" not in adata.obsm) and ("X_tSNE" in adata.obsm):
-        #if we hae tSNE but no UMAP
-        sc.pl.embedding(
-            adata,
-            basis = 'X_tSNE',
-            color = args.cluster_header,
-            frameon = False,
-            use_raw = args.use_raw,
-            save = f"_{data_id}_global_data_tSNE.png"
-            )
-        sc.pl.embedding(
-            adata[adata.obs[args.cluster_header].isin(args.endo_labels)],
-            basis='X_tSNE',
-            color = args.cluster_header,
-            frameon = False,
-            use_raw = args.use_raw,
-            save = f"_{data_id}_local_data_tSNE.png"
-        )
-    elif ("X_umap" in adata.obsm):      
-        # we have UMAP and no tSNE
-        sc.pl.umap(
-            adata,
-            color = args.cluster_header,
-            frameon = False,
-            use_raw = args.use_raw,
-            save = f"_{data_id}_global_data.png"
-        )
+    # [ ] TODO: delete all of the conditional plotting logic below and replace with sc.pl.embedding that used dim_red as basis
+    # if ("X_umap" not in adata.obsm) and ("X_tSNE" in adata.obsm):
+    #     #if we hae tSNE but no UMAP
+    #     sc.pl.embedding(
+    #         adata,
+    #         basis = 'X_tSNE',
+    #         color = args.cluster_header,
+    #         frameon = False,
+    #         use_raw = args.use_raw,
+    #         save = f"_{data_id}_global_data_tSNE.png"
+    #         )
+    #     sc.pl.embedding(
+    #         adata[adata.obs[args.cluster_header].isin(args.endo_labels)],
+    #         basis='X_tSNE',
+    #         color = args.cluster_header,
+    #         frameon = False,
+    #         use_raw = args.use_raw,
+    #         save = f"_{data_id}_local_data_tSNE.png"
+    #     )
+    # elif ("X_umap" in adata.obsm):      
+    #     # we have UMAP and no tSNE
+    #     sc.pl.umap(
+    #         adata,
+    #         color = args.cluster_header,
+    #         frameon = False,
+    #         use_raw = args.use_raw,
+    #         save = f"_{data_id}_global_data.png"
+    #     )
         
-        sc.pl.umap(
-            adata[adata.obs[args.cluster_header].isin(args.endo_labels)],
-            color = args.cluster_header,
-            frameon = False,
-            use_raw = args.use_raw,
-            save = f"_{data_id}_local_data.png"
-        )
-    else:
-        # we have neither tSNE nor UMAP so make UMAP
-        print(f"[{data_id}] No `X_umap` is .obsm, calculating...")
-        sc.pp.neighbors(adata, n_pcs=30, random_state=seed)
-        sc.tl.umap(adata, n_components=30, random_state=seed)
-        sc.set_figure_params(dpi=200)
+    #     sc.pl.umap(
+    #         adata[adata.obs[args.cluster_header].isin(args.endo_labels)],
+    #         color = args.cluster_header,
+    #         frameon = False,
+    #         use_raw = args.use_raw,
+    #         save = f"_{data_id}_local_data.png"
+    #     )
+    # else:
+    #     # we have neither tSNE nor UMAP so make UMAP
+    #     print(f"[{data_id}] No `X_umap` is .obsm, calculating...")
+    #     sc.pp.neighbors(adata, n_pcs=30, random_state=seed)
+    #     sc.tl.umap(adata, n_components=30, random_state=seed)
+    #     sc.set_figure_params(dpi=200)
         
-        sc.pl.umap(
-            adata,
-            color = args.cluster_header,
-            frameon = False,
-            use_raw = args.use_raw,
-            save = f"_{data_id}_global_data.png")
+    #     sc.pl.umap(
+    #         adata,
+    #         color = args.cluster_header,
+    #         frameon = False,
+    #         use_raw = args.use_raw,
+    #         save = f"_{data_id}_global_data.png")
 
-        sc.pl.umap(
-            adata[adata.obs[args.cluster_header].isin(args.endo_labels)],
-            color = args.cluster_header,
-            frameon = False,
-            use_raw = args.use_raw,
-            save = f"_{data_id}_local_data.png")
+    #     sc.pl.umap(
+    #         adata[adata.obs[args.cluster_header].isin(args.endo_labels)],
+    #         color = args.cluster_header,
+    #         frameon = False,
+    #         use_raw = args.use_raw,
+    #         save = f"_{data_id}_local_data.png")
 
     os.makedirs(os.path.join(args.tmpdir, f'{data_id}_tmp_files', 'h5ads'), exist_ok=True)
     adata.write(os.path.join(args.tmpdir, f'{data_id}_tmp_files', 'h5ads', f'{data_id}_ingested.h5ad'))
