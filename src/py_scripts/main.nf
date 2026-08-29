@@ -57,7 +57,7 @@ workflow {
                 row.cxg_flag,
                 row.var_col_arg,
                 row.cluster_header_arg,
-                row.endo_labels.split(',').join(' '),
+                row.endo_labels,
                 row.binary_thresholding,
                 row.memory_spec,
                 row.partition_spec

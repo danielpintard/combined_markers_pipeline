@@ -296,6 +296,9 @@ def process_h5ad(data_id, data_path,
     print(f"Cleaning missing annotations in {args.cluster_header}...")
     adata.obs[args.cluster_header] = adata.obs[args.cluster_header].astype(object).fillna("Unknown").astype(str).astype('category')
     
+    # cluster_labels arg converted from string to list
+    args.cluster_labels = [str(cluster_label) for cluster_label in args.cluster_labels.split(",")]
+    
     validate_cluster_labels(adata=adata, cluster_header=args.cluster_header, cluster_labels=args.cluster_labels)
 
     ## CHECK .X TO SEE IF ITS TRANSFORMED ALREADY
@@ -353,7 +356,7 @@ def main():
     parser.add_argument("--cxg", action="store_true", help="Indicate whether or not data is sourced from CellxGene. Omit if data not from CellxGene. This is to deal with how CellxGene organizes their adata.var")
     parser.add_argument("--var_col", type=str, default="", help="Column in adata.var where gene symbols are held")
     parser.add_argument("--use_raw", action="store_false", help="Flag to use adata.raw for plotting umap")
-    parser.add_argument("--cluster_labels", type=str, nargs='+', required=True, help="Array of cluster labels that compose your local data of interest. Could represent a lineage/compartment or a certain biologically relevant grouping of cells.")
+    parser.add_argument("--cluster_labels", type=str, required=True, help="Comma-separated string of cluster labels that compose your local data of interest. Could represent a lineage/compartment or a certain biologically relevant grouping of cells.")
     parser.add_argument("--balance_groups", action="store_true", help="Whether or not to balance group sizes of endothelial cells to the lowest represented group")
     parser.add_argument("--meet_at_value", action="store_true")
     parser.add_argument("--standard_ds", action="store_true")
