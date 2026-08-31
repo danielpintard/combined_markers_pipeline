@@ -355,12 +355,11 @@ def main():
     parser.add_argument("--tmpdir", type=str, required=True, help="Temporary space for holding intermediate files. On Biowulf, set $TMPDIR to lscratch space.")
     parser.add_argument("--cxg", action="store_true", help="Indicate whether or not data is sourced from CellxGene. Omit if data not from CellxGene. This is to deal with how CellxGene organizes their adata.var")
     parser.add_argument("--var_col", type=str, default="", help="Column in adata.var where gene symbols are held")
-    parser.add_argument("--use_raw", action="store_false", help="Flag to use adata.raw for plotting umap")
     parser.add_argument("--cluster_labels", type=str, required=True, help="Comma-separated string of cluster labels that compose your local data of interest. Could represent a lineage/compartment or a certain biologically relevant grouping of cells.")
-    parser.add_argument("--balance_groups", action="store_true", help="Whether or not to balance group sizes of endothelial cells to the lowest represented group")
-    parser.add_argument("--meet_at_value", action="store_true")
-    parser.add_argument("--standard_ds", action="store_true")
-    parser.add_argument("--n_cells_to_keep", type=int, default=None, help="Target number of cells per cluster")
+    # parser.add_argument("--balance_groups", action="store_true", help="Whether or not to balance group sizes of endothelial cells to the lowest represented group")
+    # parser.add_argument("--meet_at_value", action="store_true")
+    # parser.add_argument("--standard_ds", action="store_true")
+    # parser.add_argument("--n_cells_to_keep", type=int, default=None, help="Target number of cells per cluster")
 
     args = parser.parse_args()
 
