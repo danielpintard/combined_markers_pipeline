@@ -153,80 +153,6 @@ def standard_downsample(group, n_obs_to_keep: int, seed: int):
     else:
         return group
 
-def balance_clusterSizes(adata: ad.AnnData, cluster_header: str, balance_groups: bool, cluster_labels: list, n_cells_to_keep: int = None, 
-    standard_ds: bool = None, meet_at_value: bool = None, seed: int = seed):
-    # SCOPE: GLOBAL (potentially)
-    """_summary_
-
-    Args:
-        adata (ad.AnnData): _description_
-        cluster_header (str): _description_
-        balance_groups (bool): _description_
-        cluster_labels (list): _description_
-        n_cells_to_keep (int, optional): _description_. Defaults to None.
-        standard_ds (bool, optional): _description_. Defaults to None.
-        meet_at_value (bool, optional): _description_. Defaults to None.
-        seed (int, optional): _description_. Defaults to seed.
-
-    Returns:
-        _type_: _description_
-    """
-    
-    # wont look pretty but I'm gonna write a nasty nested conditional and even though it won't be the most readable, but I think logically, it is the best option here for 
-    # compartmentalizing different functionality for different use cases
-    
-    # TODO:
-    # [ ] implement logic for automatically calculating n_cells_to_keep
-    # [ ] implement logic for doing group balancing across all cell types
-
-    if balance_groups:
-        if not n_cells_to_keep: # if user does not pass in a value, then automatically determine n_cells_to_keep
-            if meet_at_value: n_cells_to_keep = "" # TODO find n_cells_to_keep by getting lowest n cluster in cluster_header, take that number, x1.5
-            elif standard_ds: n_cells_to_keep = "" # TODO find n_cells_to_keep by getting lowest n cluster in cluster_header
-        if cluster_labels: # if we only do bal
-            print(f"Balancing clusterSizes amongst selected `cluster_labels` in adata.obs[`{cluster_header}`]")
-            subset = adata.obs[adata.obs[cluster_header].isin(cluster_labels)]
-            non_endo_indices = adata.obs[~adata.obs[cluster_header].isin(cluster_labels)].index.tolist()
-            if meet_at_value:
-                print(f"`meet_at_value` sampling strategy. Clusters in adata.obs[`{cluster_header}`] > {n_cells_to_keep} downsampled and clusters < {n_cells_to_keep} upsampled.")
-                sampled_endo = subset.groupby(cluster_header, observed=True, group_keys=False).apply(meet_target, 
-                                                                                                        n_obs_to_keep = n_cells_to_keep, 
-                                                                                                        seed = seed)
-                sampled_endo_indices = sampled_endo.index.tolist()
-                all_kept_idx = sampled_endo_indices + non_endo_indices
-                adata = adata[all_kept_idx].copy()
-                adata.obs_names_make_unique() # gotta make obs_names unique since cells are being duplicated
-            elif standard_ds:
-                print(f"`standard_ds` sampling strategy. Clusters in adata.obs[`{cluster_header}`] > {n_cells_to_keep} downsampled.")
-                sampled_endo = subset.groupby(cluster_header, observed=True, group_keys=False).apply(standard_downsample,
-                                                                                                     n_obs_to_keep = n_cells_to_keep,
-                                                                                                     seed = seed)
-                sampled_endo_indices = sampled_endo.index.tolist()
-                all_kept_set = set(sampled_endo_indices + non_endo_indices)        
-                ordered_kept_idx = [idx for idx in adata.obs_names if idx in all_kept_set] # ensure we maintain the original order of the matrix
-                adata = adata[ordered_kept_idx].copy()
-            else: # error handling for missing param, this should kill this whole script
-                print("Please specify a group balancing strategy: `meet_at_value` or `standard_ds`")
-                sampled_endo_indices = subset.index.tolist()
-                
-        else: 
-            print(f"Balancing clusterSizes amongst all clusters in adata.obs[`{cluster_header}`]")
-            if meet_at_value:
-                grouped_ad_idx = adata.obs[cluster_header].groupby(cluster_header, observed = True, group_keys=False).apply(meet_target,
-                                                                                                                            n_obs_to_keep = n_cells_to_keep,
-                                                                                                                            seed = seed).index.tolist()
-                all_kept_set = set(grouped_ad_idx)        
-                adata = adata[all_kept_set].copy()
-            else:
-                grouped_ad_idx = adata.obs[cluster_header].groupby(cluster_header, observed = True, group_keys=False).apply(standard_downsample,
-                                                                                                                         n_obs_to_keep = n_cells_to_keep,
-                                                                                                                         seed = seed).index.tolist()
-                all_kept_set = set(grouped_ad_idx)        
-                ordered_kept_idx = [idx for idx in adata.obs_names if idx in all_kept_set] # ensure we maintain the original order of the matrix
-                adata = adata[ordered_kept_idx].copy()
-    else:
-        print("`balance_groups` set to `False`. adata object remains unchanged")
-        return adata
     
 def check_dimreds(adata: ad.AnnData, seed: int = seed):
     # SCOPE: GLOBAL
@@ -303,14 +229,6 @@ def process_h5ad(data_id, data_path,
 
     ## CHECK .X TO SEE IF ITS TRANSFORMED ALREADY
     adata = check_X_transformation(adata)
-
-    ## IMPLEMENT DIFFERENT GROUP BALANCING STRATEGIES AMONGST CELL TYPE CLASS OF INTEREST
-    adata = balance_clusterSizes(adata, cluster_header=args.cluster_header, 
-                                 balance_groups=False # currently set to False until balance_groups logic is fixed. Also need to figure out if balancing amongst provided cluster_labels is a worthwhile implementation
-                                 # or if I should only include logic for downsampling across the board. We know that proportionality of clusterSizes impact the quality of clusters, and balancing them returns more 
-                                 # biologically representative results. This is convincing me that we should only contain logic for downsampling all clusters (if they exceed n_cells_to_keep). I think this is something 
-                                 # else I should factor into the experiment I plan to do with comparing the impact of clusterSize balancing on quality of marker gene discovery.
-                                 )
     
     adata, dim_red = check_dimreds(adata=adata, seed=seed)
     
