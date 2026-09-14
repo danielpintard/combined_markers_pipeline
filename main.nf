@@ -15,9 +15,8 @@ process INGEST {
     input:
     tuple val(meta), path(h5ad_path)
     
-    
     output:
-    tuple val(meta.data_id), path("${meta.data_id}_ingested.h5ad"), emit: ingested
+    tuple val(meta.data_id), path("ingested_h5ads/${meta.data_id}_ingested.h5ad"), emit: ingested
     path "figures/**", emit: figures, optional: true
 
     script:
@@ -30,7 +29,6 @@ process INGEST {
         --data_path "${h5ad_path}" \\
         --results_dir . \\
         --cluster_header "${meta.cluster_header}" \\
-        --tmpdir . \\
         --var_col "${meta.var_col}" \\
         --cluster_labels "${meta.cluster_labels}" \\
         ${cxg_arg}

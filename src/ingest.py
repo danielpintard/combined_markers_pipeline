@@ -217,8 +217,8 @@ def process_h5ad(data_id, data_path,
             save = f"_{data_id}_local_data.png"
         )
 
-    os.makedirs(os.path.join(args.tmpdir, f'{data_id}_tmp_files', 'h5ads'), exist_ok=True)
-    adata.write(os.path.join(args.tmpdir, f'{data_id}_tmp_files', 'h5ads', f'{data_id}_ingested.h5ad'))
+    os.makedirs(os.path.join(args.results_dir, 'ingested_h5ads'), exist_ok=True)
+    adata.write(os.path.join(args.results_dir, 'ingested_h5ads', f'{data_id}_ingested.h5ad'))
     del adata 
     gc.collect()
     
@@ -231,16 +231,11 @@ def main():
     parser.add_argument("--data_id", type=str, help="String to ID the data. Required if not using --sample_sheet.")
     parser.add_argument("--data_path", type=str, help="Path to input h5ad file. Required if not using --sample_sheet.")
 
-    parser.add_argument("--results_dir", type=str, required=True, help="Path to save results. Directory named after --data_id.")
+    parser.add_argument("--results_dir", type=str, required=True, help="Path to save results. Directory named after --data_id.") # path NOTE: change path to point to stable dir
     parser.add_argument("--cluster_header", type=str, required=True, help="Column name of adata.obs that contains cell type labels of interest")
-    parser.add_argument("--tmpdir", type=str, required=True, help="Temporary space for holding intermediate files. On Biowulf, set $TMPDIR to lscratch space.")
     parser.add_argument("--cxg", action="store_true", help="Indicate whether or not data is sourced from CellxGene. Omit if data not from CellxGene. This is to deal with how CellxGene organizes their adata.var")
     parser.add_argument("--var_col", type=str, default="", help="Column in adata.var where gene symbols are held")
     parser.add_argument("--cluster_labels", type=str, required=True, help="Comma-separated string of cluster labels that compose your local data of interest. Could represent a lineage/compartment or a certain biologically relevant grouping of cells.")
-    # parser.add_argument("--balance_groups", action="store_true", help="Whether or not to balance group sizes of endothelial cells to the lowest represented group")
-    # parser.add_argument("--meet_at_value", action="store_true")
-    # parser.add_argument("--standard_ds", action="store_true")
-    # parser.add_argument("--n_cells_to_keep", type=int, default=None, help="Target number of cells per cluster")
 
     args = parser.parse_args()
 

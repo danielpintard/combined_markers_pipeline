@@ -1,7 +1,3 @@
-# NOTE: perhaps considering option to add custom dendrogram order??
-# NOTE: For testing purposes, I should have this script report at what datetime were data objects deleted to clear memory, because that would be great for crossreferencing
-#       with the memory usage overtime for a given job, ex. if I see a drop in memory usage, that could suggest an adata object being deleted is the reason why
-# ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -30,6 +26,9 @@ def barplot_nsf_res(df:pd.DataFrame,
                     figsize:tuple = (8,4), 
                     save_path:str = None, 
                     save:bool = True):
+    """
+    """
+    
     
     melted_df = df.melt(id_vars = 'clusterName', value_vars=value_vars, var_name = 'classification_metric', value_name='value')
     
@@ -50,11 +49,31 @@ def barplot_nsf_res(df:pd.DataFrame,
 def metric_comparison_barplots():
     pass
 
-def nsforest_preprocessing():
-    pass
+def compute_and_get_dendrogram_order(adata: ad.AnnData, cluster_header: str, save_path: str, filename_suffix: str):
+    # SCOPE: GLOBAL
+    """
     
-def get_global_markers():
-    pass
+    """
+    os.makedirs(os.path.join(save_path, "figures", "dendrograms"), exist_ok=True)
+    ad = adata.copy()
+    ns.pp.dendrogram(ad, cluster_header, save=True, output_folder=save_path, outputfilename_suffix=f"{filename_suffix}_{cluster_header}")
+    dendrogram_obj = copy.deepcopy(ad.uns[f"dendrogram_{cluster_header}"])
+    del ad
+    gc.collect()
+    
+    return dendrogram_obj
+    
+
+def nsforest_preprocessing(adata: ad.AnnData, data_id: str, cluster_header: str):
+    # SCOPE: GLOBAL
+    """
+    
+    """
+    print(f"Running NS-Forest preproccessing on {data_id}")
+    adata = ns.pp.prep_medians(adata=adata, cluster_header=cluster_header, positive_genes_only=True)    
+    adata = ns.pp.prep_binary_scores(adata=adata, cluster_header=cluster_header)
+    
+    return adata
 
 def get_class_markers():
     pass
@@ -66,7 +85,7 @@ def main():
     #### argparse ####
     parser = argparse.ArgumentParser(description="Run NSForest to get global, local and combined markers from data")
     parser.add_argument("--data_id", type=str, required=True, help="String to ID the data")
-    parser.add_argument("--tmpdir", type=str, required=True, help = "Temporary space for holding intermediate files. On Biowulf, set $TMPDIR to lscratch space.")
+    parser.add_argument("--path_to_ingested_h5ad", type=str, required=True, help = "Path containing ingested h5ad file produced by ingest.py. Must point to any viable h5ad file.")
     parser.add_argument("--cluster_header", type=str, required=True, help = "Column name of adata.obs that contains cell type labels of interest")
     parser.add_argument("--binary_thresholding", type=str, default = "BinaryFirst_high", help = "Thresholding level for selecting positively expressed genes for Random Forest")
     parser.add_argument("--results_dir", type=str, required=True, help = "Path to save results. Directory named after --data_id.")
@@ -76,17 +95,117 @@ def main():
     args = parser.parse_args()
 
     data_id = args.data_id
-    tmpdir = args.tmpdir
+    h5ad_path = args.path_to_ingested_h5ad
     cluster_header = args.cluster_header
     results_dir = args.results_dir
-    endo_labels = args.endo_labels
+    endo_labels = args.cluster_labels
     binary_thresh = args.binary_thresholding
     njobs = args.n_cores
     
     # call functions to run processes
+
+    # READ AND PREPROCESS GLOBAL DATA
+    adata = sc.read_h5ad(h5ad_path)
+    
+    global_adata = adata.copy()
+    global_adata = nsforest_preprocessing(adata=global_adata, data_id=data_id, cluster_header=cluster_header)
+    global_adata.uns[f"dendrogram_{cluster_header}"] = compute_and_get_dendrogram_order(
+        adata=global_adata, cluster_header=cluster_header, save_path=results_dir, filename_suffix="global_data")
+
+    # create results/tables/ subdir before first call of NS-Forest
+    tables_subdirpath = os.path.join(results_dir, "tables")
+    os.makedirs(tables_subdirpath, exist_ok=True)
+    
+    ###################### MARKER SET DISCOVERY ######################
+    
+    print("DISCOVERING GLOBAL MARKERS\n")
+    global_data_results = nsforesting.NSForest(
+        adata = global_adata, cluster_header=cluster_header, output_folder=tables_subdirpath, outputfilename_prefix=f"{cluster_header}_global_NSForest_res",
+        gene_selection=binary_thresh, save_supplementary=False, njobs=njobs
+    )
+    
+    print("DISCOVERING CLASS MARKER(S)\n")
+    class_adata = adata.copy()
+    endo_class_mapping = {"Endothelial" : endo_labels}
+    endo_class_mapping = {ct: group for group, types in {**endo_class_mapping}.items() for ct in types}
+    class_adata.obs['class_plus_granular'] = class_adata.obs[cluster_header].astype(str).replace(endo_class_mapping).astype('category')
+
+    # handle dendrogram for new annotation including Endothelial ensemble cluster
+    class_adata.uns[f"dendrogram_class_plus_granular"] = compute_and_get_dendrogram_order(
+            adata=class_adata, cluster_header=cluster_header, save_path=results_dir, filename_suffix="local_data")
+    
+    class_data_results = nsforesting.NSForest(adata = class_adata, cluster_header="class_plus_granular", output_folder=tables_subdirpath, outputfilename_prefix="class_and_global_NSForest_results",
+                                              gene_selection=binary_thresh, save_supplementary=False, njobs=njobs)
+    
+    
+    print("DISCOVERING LOCAL MARKERS\n")
+    local_adata = adata[adata.obs[cluster_header].isin(endo_labels)].copy()
+    local_adata.obs[cluster_header] = local_adata.obs[cluster_header].cat.remove_unused_categories()
+    
+    local_adata = nsforest_preprocessing(adata = class_adata, data_id=data_id, cluster_header=cluster_header)
+    
+    # handle dendrogram for local dataset
+    if f'dendrogram_{cluster_header}' in local_adata.uns:
+        del local_adata.uns[f'dendrogram_{cluster_header}']
+        local_adata.uns[f"dendrogram_{cluster_header}"] = compute_and_get_dendrogram_order(
+            adata=local_adata, cluster_header=cluster_header, save_path=results_dir, filename_suffix="local_data")
+    else:
+        local_adata.uns[f"dendrogram_{cluster_header}"] = compute_and_get_dendrogram_order(
+                adata=local_adata, cluster_header=cluster_header, save_path=results_dir, filename_suffix="local_data")
+    
+    local_data_results = nsforesting.NSForest(
+        adata = local_adata, cluster_header=cluster_header, output_folder=tables_subdirpath, outputfilename_prefix=f"{cluster_header}_local_NSForest_res",
+        gene_selection=binary_thresh, save_supplementary=False, n_jobs = njobs
+        )
+    
+    ###################### MARKER SET EVALUATION ######################
+    # so we have global on global res, local on local, and no combined marker results
+    
+    print("EVALUATING GLOBAL MARKERS ON LOCAL DATA\n")
+    global_markers = {
+                cluster : list(ast.literal_eval(markers)) if isinstance(markers, str) else list(markers)
+                for cluster, markers in zip(global_data_results['clusterName'], global_data_results['NSForest_markers'])
+        } #RULE: marker dicts are made right before actually being used; same case with subsets of data
+        
+    global_markers_endo_only = {
+        cluster: global_markers[cluster]
+        for cluster in global_markers
+        if cluster in endo_labels
+        }
+    
+    global_marker_on_local_data_res = ns.ev.DecisionTree(adata=local_adata, cluster_header=cluster_header, markers_dict=global_markers_endo_only, combinations = False,
+                                                         use_mean=False, save_supplementary=False, output_folder=tables_subdirpath, outputfilename_prefix="global_markers_eval_on_local_data_results")
+    
+    print("EVALUATING LOCAL MARKERS ON GLOBAL DATA\n")
+    local_markers = {
+        cluster: list(ast.literal_eval(markers)) if isinstance(markers, str) else list(markers)
+        for cluster, markers in zip(local_data_results['clusterName'], local_data_results['NSForest_markers'])
+    }
+    
+    local_marker_on_global_data_res = ns.ev.DecisionTree(adata=global_adata, cluster_header=cluster_header, markers_dict=local_markers, combinations=False, use_mean=False,
+                                                         save_supplementary=False, output_folder=tables_subdirpath, outputfilename_prefix="local_markers_eval_on_global_data_results")
+
+    
+    print("EVALUATING COMBINED MARKER SETS ON GLOBAL DATA\n")
+    class_marker = {"Endothelial" : class_data_results['NSForest_markers']}
+    # combined_markers = 
+    
+    print("EVALUATING COMBINED MARKER SETS ON LOCAL DATA\n")
+    
+    
+    
+    
+    local_markers = {}
+    
+    endo_class_marker = {}
+    
+    
+
     
 ###### FUNCTION DEFINITIONS END ######
 
+# OLD CODE
+#------------------------------------------------------------------------------------------------------------------------------
 # read adata from tmpdir, need to get list of objects from tmp dir and then deploy them as batch array
 
 adata = sc.read_h5ad(os.path.join(tmpdir, f'{data_id}_tmp_files', 'h5ads', f'{data_id}_ingested.h5ad'))
