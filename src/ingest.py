@@ -116,43 +116,6 @@ def check_X_transformation(adata):
         sc.pp.log1p(adata)
     
     return adata
-
-### clusterSize balancing related functions. These might get put into a utils directory.
-def meet_target(group: pd.DataFrame, n_obs_to_keep: int, seed: int):
-    # SCOPE: GLOBAL
-    """_summary_
-
-    Args:
-        group (pd.DataFrame): _description_
-        n_obs_to_keep (int): _description_
-        seed (int): _description_
-
-    Returns:
-        _type_: _description_
-    """
-    if len(group) == 0:
-        return group
-    elif len(group) < n_obs_to_keep:
-        return group.sample(n=n_obs_to_keep, replace=True, random_state=seed)
-    else:
-        return group.sample(n=n_obs_to_keep, replace=False, random_state=seed)
-
-def standard_downsample(group, n_obs_to_keep: int, seed: int):
-    """_summary_
-
-    Args:
-        group (_type_): _description_
-        n_obs_to_keep (int): _description_
-        seed (int): _description_
-
-    Returns:
-        _type_: _description_
-    """
-    if len(group) > n_obs_to_keep:
-        return group.sample(n=n_obs_to_keep, replace=False, random_state=seed)
-    else:
-        return group
-
     
 def check_dimreds(adata: ad.AnnData, seed: int = seed):
     # SCOPE: GLOBAL
@@ -282,6 +245,7 @@ def main():
     args = parser.parse_args()
 
     process_h5ad(args.data_id, args.data_path, args)
+    
 ###### FUNCTION DEFINITIONS END ######
 
 if __name__ == "__main__":
