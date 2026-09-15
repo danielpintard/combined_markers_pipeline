@@ -67,17 +67,19 @@ def resolve_var_names(adata: ad.AnnData, data_id: str, cxg: bool, var_col: str):
     
     return adata
 
-def validate_cluster_labels(adata: ad.AnnData, cluster_header: str, cluster_labels: list):
+def validate_cluster_labels(adata: ad.AnnData, cluster_header: str, cluster_labels: list[str]):
     # SCOPE: GLOBAL
-    """_summary_
+    """\
+        Checks adata.obs['cluster_header'] to ensure provided `cluster_labels` exists in the data. Raises ValueError if \
+        cluster_labels are not found in adata.obs['cluster_header'].
 
     Args:
-        adata (ad.AnnData): _description_
-        cluster_header (str): _description_
-        cluster_labels (list): _description_
+        adata (ad.AnnData): Annotated data matrix.
+        cluster_header (str): String that corresponds to the field in ad.AnnData.obs that contains cluster annotations.
+        cluster_labels (list(str)): List of strings that reflect which cell types of interest will compose the local data.
 
     Raises:
-        ValueError: _description_
+        ValueError: Alerts user that labels included in `cluster_labels` do not appear in the data 
     """
     present = set(adata.obs[cluster_header].unique())
     missing = [lab for lab in cluster_labels if lab not in present]
@@ -88,6 +90,7 @@ def validate_cluster_labels(adata: ad.AnnData, cluster_header: str, cluster_labe
         )
 
 def check_X_transformation(adata):
+    # SCOPE: GLOBAL
     """\
         Checks adata.X to ensure it has been transformed using scanpy.pp.normalize_total(target_sum=1e4) and scanpy.pp.log1p()
 
@@ -119,14 +122,16 @@ def check_X_transformation(adata):
     
 def check_dimreds(adata: ad.AnnData, seed: int = seed):
     # SCOPE: GLOBAL
-    """_summary_
+    """\
+        Checks adata.obsm if precomputed PCA, UMAP and/or tSNE embeddings exist in the h5ad object 
 
     Args:
-        adata (ad.AnnData): _description_
+        adata (ad.AnnData): Annotated data matrix.
         seed (int, optional): _description_. Defaults to seed.
 
     Returns:
-        _type_: _description_
+        adata (ad.AnnData): Annotated data matrix. Will have 'X_pca' and/or 'X_umap' keys added to obsm if viable embeddings did not exists for this object. 
+        dim_red (str) : String corresponding to preferred non-linear dimension reduced embedding to be used for plotting the cluster annotations in the data.
     """
     if ("X_pca" in adata.obsm) and (adata.obsm['X_pca'].shape[1] > 30):
         print(f"adata contains viable PCA embedding with > 30 PCs")
@@ -161,14 +166,15 @@ def check_dimreds(adata: ad.AnnData, seed: int = seed):
     return adata, dim_red
 
 
-def process_h5ad(data_id, data_path, 
-                 args # still don't know if args are gonna be passed here
-                 ):
+def process_h5ad(data_id, data_path, args):
     # SCOPE: THIS PROJ
-    """_summary_
+    """\
+        Main worker function for ingesting, validating, and processing h5ad objects before running through the remainder of the pipeline.
 
     Args:
-        data_id (_type_): _description_
+        data_id (str): String for identifier of h5ad object
+        data_path (str): Path to h5ad object. Passed into scanpy.read_h5ad() function
+        args (argparse.Namespace): Namespace containing args recieved from samplesheet.tsv
     """
     print(f"\nStarting ingestion of {data_id} from {data_path}")
     

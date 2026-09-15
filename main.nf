@@ -13,7 +13,7 @@ process INGEST {
     queue { meta.partition_spec }
 
     input:
-    tuple val(meta), path(h5ad_path)
+    tuple val(meta), path(h5ad_path) 
     
     output:
     tuple val(meta.data_id), path("ingested_h5ads/${meta.data_id}_ingested.h5ad"), emit: ingested
@@ -35,13 +35,38 @@ process INGEST {
     """
 }
 
+process GET_AND_EVAL_MARKERS {
+    tag "${meta.data_id}"
+    publishDir "${params.results_dir}/${meta.data_id}", mode: 'copy'
+
+    memory { meta.memory_spec }
+    queue { meta.partition_spec }
+
+    input:
+    path(ingested_h5ad_path)
+
+    script:
+    """
+    source myconda; conda activate nsforestv4.1
+
+    python ${projectDir}/src/get_markers_and_eval.py \\
+        --data_id "${meta.data_id}" \\
+        --path_to_ingested_h5ad "${ingested_h5ad_path}" \\
+        --cluster_header "${meta.cluster_header}" \\
+        --binary_thresholding "${meta.binary_thresholding}" \\
+        --results_dir . \\
+        --cluster_labels \\
+        --cluster_labels "${meta.cluster_labels}" \\
+        --n_cores "${}" # not sure where this would come from? 
+    """
+}
+
 workflow {
     if (!params.samplesheet) {
         error "Provide --samplesheet <path to tsv>"
     }
 
-    Channel
-        .fromPath(params.samplesheet)
+    ingest_inputs = Channel.fromPath(params.samplesheet)
         .ifEmpty { exit 1, "Cannot find sample sheet TSV: ${params.samplesheet}"}
         .splitCsv(header: true, sep: '\t')
         .map { row ->
@@ -57,7 +82,5 @@ workflow {
             ]
             tuple(meta, file(row.h5ad_path))
         }
-        .set { ingest_inputs }
 
     INGEST(ingest_inputs)
-}
