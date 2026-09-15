@@ -21,8 +21,15 @@ from nsforest import evaluating as ev
 ###### FUNCTION DEFINITIONS START ######
 def nsforest_preprocessing(adata: ad.AnnData, data_id: str, cluster_header: str):
     # SCOPE: GLOBAL
-    """
-    
+    """_summary_
+
+    Args:
+        adata (ad.AnnData): _description_
+        data_id (str): _description_
+        cluster_header (str): _description_
+
+    Returns:
+        _type_: _description_
     """
     print(f"Running NS-Forest preproccessing on {data_id}")
     adata = pp.prep_medians(adata=adata, cluster_header=cluster_header, positive_genes_only=True)    

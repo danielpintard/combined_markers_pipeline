@@ -130,8 +130,8 @@ def check_dimreds(adata: ad.AnnData, seed: int = seed):
         seed (int, optional): _description_. Defaults to seed.
 
     Returns:
-        adata (ad.AnnData): Annotated data matrix. Will have 'X_pca' and/or 'X_umap' keys added to obsm if viable embeddings did not exists for this object. 
-        dim_red (str) : String corresponding to preferred non-linear dimension reduced embedding to be used for plotting the cluster annotations in the data.
+        ad.AnnData: Annotated data matrix. Will have 'X_pca' and/or 'X_umap' keys added to obsm if viable embeddings did not exists for this object. 
+        str: String corresponding to preferred non-linear dimension reduced embedding to be used for plotting the cluster annotations in the data.
     """
     if ("X_pca" in adata.obsm) and (adata.obsm['X_pca'].shape[1] > 30):
         print(f"adata contains viable PCA embedding with > 30 PCs")
@@ -166,10 +166,11 @@ def check_dimreds(adata: ad.AnnData, seed: int = seed):
     return adata, dim_red
 
 
-def process_h5ad(data_id, data_path, args):
+def process_h5ad(data_id: str, data_path: str, args: argparse.Namespace):
     # SCOPE: THIS PROJ
     """\
-        Main worker function for ingesting, validating, and processing h5ad objects before running through the remainder of the pipeline.
+        Main worker function for ingesting, validating, and processing h5ad objects \
+        before running through the remainder of the pipeline.
 
     Args:
         data_id (str): String for identifier of h5ad object

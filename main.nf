@@ -49,7 +49,6 @@ process GET_AND_EVAL_MARKERS {
 
     output:
     tuple val(meta), path("tables/**"), emit: tables
-    path "figures/**", emit: figures, optional: true
 
     script:
     """
