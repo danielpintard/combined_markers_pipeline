@@ -6,15 +6,16 @@ params.samplesheet = null
 params.results_dir = "${projectDir}/results"
 
 process INGEST {
+    input:
+    tuple val(meta), path(h5ad_path) 
+
     tag "${meta.data_id}"
-    publishDir "${params.results_dir}/${meta.data_id}", mode: 'copy'
+    publishDir "${params.results_dir}/${meta.data_id}", mode: 'copy', pattern: "ingested_h5ads/*.h5ad"
+    publishDir "${params.results_dir}/${meta.data_id}", mode: 'copy', pattern: "figures/**"
 
     memory { meta.memory_spec }
     queue { meta.partition_spec }
 
-    input:
-    tuple val(meta), path(h5ad_path) 
-    
     output:
     tuple val(meta.data_id), path("ingested_h5ads/${meta.data_id}_ingested.h5ad"), emit: ingested
     path "figures/**", emit: figures, optional: true
@@ -36,14 +37,19 @@ process INGEST {
 }
 
 process GET_AND_EVAL_MARKERS {
+    input:
+    tuple val(meta), path(ingested_h5ad_path)
+    
     tag "${meta.data_id}"
-    publishDir "${params.results_dir}/${meta.data_id}", mode: 'copy'
+    publishDir "${params.results_dir}/${meta.data_id}", mode: 'copy', pattern: "tables/**"
+    publishDir "${params.results_dir}/${meta.data_id}", mode: 'copy', pattern: "figures/**"
 
     memory { meta.memory_spec }
     queue { meta.partition_spec }
 
-    input:
-    path(ingested_h5ad_path)
+    output:
+    tuple val(meta), path("tables/**"), emit: tables
+    path "figures/**", emit: figures, optional: true
 
     script:
     """
@@ -55,9 +61,8 @@ process GET_AND_EVAL_MARKERS {
         --cluster_header "${meta.cluster_header}" \\
         --binary_thresholding "${meta.binary_thresholding}" \\
         --results_dir . \\
-        --cluster_labels \\
         --cluster_labels "${meta.cluster_labels}" \\
-        --n_cores "${}" # not sure where this would come from? 
+        --n_cores "${task.cpus}"
     """
 }
 
@@ -84,3 +89,6 @@ workflow {
         }
 
     INGEST(ingest_inputs)
+
+    GET_AND_EVAL_MARKERS(INGEST.out.ingested)
+}

@@ -30,12 +30,6 @@ def nsforest_preprocessing(adata: ad.AnnData, data_id: str, cluster_header: str)
     
     return adata
 
-def get_class_markers():
-    pass
-
-def get_local_markers():
-    pass
-
 def main():
     
     #### argparse ####
@@ -45,7 +39,7 @@ def main():
     parser.add_argument("--cluster_header", type=str, required=True, help = "Column name of adata.obs that contains cell type labels of interest")
     parser.add_argument("--binary_thresholding", type=str, default = "BinaryFirst_high", help = "Thresholding level for selecting positively expressed genes for Random Forest")
     parser.add_argument("--results_dir", type=str, required=True, help = "Path to save results. Directory named after --data_id.")
-    parser.add_argument("--cluster_labels", type=str, nargs='+', required=True, help="Array of endothelial labels")
+    parser.add_argument("--cluster_labels", type=str, required=True, help="Array of endothelial labels")
     parser.add_argument("--n_cores", type=int, required=True, help = "How many cores/CPUs allocated for running NSForest")
 
     args = parser.parse_args()
@@ -54,7 +48,7 @@ def main():
     h5ad_path = args.path_to_ingested_h5ad
     cluster_header = args.cluster_header
     results_dir = args.results_dir
-    endo_labels = args.cluster_labels
+    endo_labels = [str(cluster_label) for cluster_label in args.cluster_labels.split(",")]
     binary_thresh = args.binary_thresholding
     njobs = args.n_cores
     
@@ -63,7 +57,7 @@ def main():
     # READ AND PREPROCESS GLOBAL DATA
     adata = sc.read_h5ad(h5ad_path)
     # creating annotations that will come in handy for visualizing markers in dotplots
-    adata.obs['subtypes_plus_others'] = pd.Categorical(np.where(adata.obs['ann_finest_level'].isin(endo_labels), adata.obs['ann_finest_level'], 'Other Cell Types')) # NOTE: hard-coded
+    adata.obs['subtypes_plus_others'] = pd.Categorical(np.where(adata.obs[cluster_header].isin(endo_labels), adata.obs[cluster_header], 'Other Cell Types')) # NOTE: hard-coded
     
     global_adata = adata.copy()
     global_adata = nsforest_preprocessing(adata=global_adata, data_id=data_id, cluster_header=cluster_header)
@@ -77,7 +71,7 @@ def main():
     print("DISCOVERING GLOBAL MARKERS\n")
     global_data_results = nsforesting.NSForest(
         adata = global_adata, cluster_header=cluster_header, output_folder=tables_subdirpath, outputfilename_prefix=f"{cluster_header}_global_NSForest_res",
-        gene_selection=binary_thresh, save_supplementary=False, njobs=njobs
+        gene_selection=binary_thresh, save_supplementary=False, n_jobs=njobs
     )
     
     # PREP MARKERS_DICT FOR GLOBAL MARKERS AND PLOT WHOLE DATA DOTPLOT
@@ -100,13 +94,13 @@ def main():
     
     class_data_results = nsforesting.NSForest(adata = class_adata, cluster_header="class_plus_granular", output_folder=tables_subdirpath, 
                                               outputfilename_prefix="class_and_global_NSForest_results",
-                                              gene_selection=binary_thresh, save_supplementary=False, njobs=njobs)
+                                              gene_selection=binary_thresh, save_supplementary=False, n_jobs=njobs)
     
     print("DISCOVERING LOCAL MARKERS\n")
     local_adata = adata[adata.obs[cluster_header].isin(endo_labels)].copy()
     local_adata.obs[cluster_header] = local_adata.obs[cluster_header].cat.remove_unused_categories()
     
-    local_adata = nsforest_preprocessing(adata = class_adata, data_id=data_id, cluster_header=cluster_header)
+    local_adata = nsforest_preprocessing(adata = local_adata, data_id=data_id, cluster_header=cluster_header)
     
     local_data_results = nsforesting.NSForest(
         adata = local_adata, cluster_header=cluster_header, output_folder=tables_subdirpath, outputfilename_prefix=f"{cluster_header}_local_NSForest_res",
