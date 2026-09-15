@@ -6,18 +6,18 @@ params.samplesheet = null
 params.results_dir = "${projectDir}/results"
 
 process INGEST {
-    input:
-    tuple val(meta), path(h5ad_path) 
-
     tag "${meta.data_id}"
     publishDir "${params.results_dir}/${meta.data_id}", mode: 'copy', pattern: "ingested_h5ads/*.h5ad"
     publishDir "${params.results_dir}/${meta.data_id}", mode: 'copy', pattern: "figures/**"
+
+    input:
+    tuple val(meta), path(h5ad_path) 
 
     memory { meta.memory_spec }
     queue { meta.partition_spec }
 
     output:
-    tuple val(meta.data_id), path("ingested_h5ads/${meta.data_id}_ingested.h5ad"), emit: ingested
+    tuple val(meta), path("ingested_h5ads/${meta.data_id}_ingested.h5ad"), emit: ingested
     path "figures/**", emit: figures, optional: true
 
     script:
@@ -37,15 +37,15 @@ process INGEST {
 }
 
 process GET_AND_EVAL_MARKERS {
-    input:
-    tuple val(meta), path(ingested_h5ad_path)
-    
+
     tag "${meta.data_id}"
     publishDir "${params.results_dir}/${meta.data_id}", mode: 'copy', pattern: "tables/**"
-    publishDir "${params.results_dir}/${meta.data_id}", mode: 'copy', pattern: "figures/**"
-
+    // publishDir "${params.results_dir}/${meta.data_id}", mode: 'copy', pattern: "figures/**"
     memory { meta.memory_spec }
     queue { meta.partition_spec }
+
+    input:
+    tuple val(meta), path(ingested_h5ad_path)
 
     output:
     tuple val(meta), path("tables/**"), emit: tables

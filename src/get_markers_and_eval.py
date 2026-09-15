@@ -56,8 +56,6 @@ def main():
 
     # READ AND PREPROCESS GLOBAL DATA
     adata = sc.read_h5ad(h5ad_path)
-    # creating annotations that will come in handy for visualizing markers in dotplots
-    adata.obs['subtypes_plus_others'] = pd.Categorical(np.where(adata.obs[cluster_header].isin(endo_labels), adata.obs[cluster_header], 'Other Cell Types')) # NOTE: hard-coded
     
     global_adata = adata.copy()
     global_adata = nsforest_preprocessing(adata=global_adata, data_id=data_id, cluster_header=cluster_header)

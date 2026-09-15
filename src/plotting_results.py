@@ -104,5 +104,7 @@ def main():
     barplot_dir = os.path.join(fig_dir, 'barplots')
     for figure_subdir in [dotplot_dir, dendrogram_dir, barplot_dir]:
         os.makedirs(figure_subdir, exist_ok=True)
+        
+    
 
 ###### FUNCTION DEFINITIONS END ######
