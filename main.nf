@@ -48,7 +48,7 @@ process GET_AND_EVAL_MARKERS {
     tuple val(meta), path(ingested_h5ad_path)
 
     output:
-    tuple val(meta), path("tables/**"), emit: tables
+    tuple val(meta), path("tables/**"), emit: tables_path
 
     script:
     """
@@ -63,6 +63,10 @@ process GET_AND_EVAL_MARKERS {
         --cluster_labels "${meta.cluster_labels}" \\
         --n_cores "${task.cpus}"
     """
+}
+
+process REPORTING {
+
 }
 
 workflow {
@@ -90,4 +94,6 @@ workflow {
     INGEST(ingest_inputs)
 
     GET_AND_EVAL_MARKERS(INGEST.out.ingested)
+
+    REPORTING(GET_AND_EVAL_MARKERS.out.tables_path)
 }
