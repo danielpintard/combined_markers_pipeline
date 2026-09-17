@@ -158,6 +158,7 @@ def main():
         "combined_markers_on_local_data": combined_markers_on_local_data,
         "class_markers_on_global_data": class_data_results
     }
+    
     results_df = []
     for new_colname, df in markerSet_colName.items():
         cols = df.columns
@@ -168,6 +169,7 @@ def main():
         results_df.append(df)
     
     master_results_df = pd.concat(results_df, ignore_index=True)
+    master_results_df = master_results_df[[col for col in master_results_df.columns if col not in ['binary_genes', 'software_version']]]
     master_results_df.to_csv(os.path.join(tables_subdirpath, "master_results_sheet.csv"), index = False)
     
     return master_results_df, os.path.join(tables_subdirpath, "master_results_sheet.csv")

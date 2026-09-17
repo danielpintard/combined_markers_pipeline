@@ -18,7 +18,7 @@ process INGEST {
 
     output:
     tuple val(meta), path("ingested_h5ads/${meta.data_id}_ingested.h5ad"), emit: ingested
-    path "figures/**", emit: figures, optional: true
+    path "figures/**", emit: figures
 
     script:
     def cxg_arg = (meta.cxg_flag == 'True') ? '--cxg' : ''
@@ -49,6 +49,7 @@ process GET_AND_EVAL_MARKERS {
 
     output:
     tuple val(meta), path("tables/**"), emit: tables_path
+    path "tables/master_results_sheet.csv", emit: master_sheet_path
 
     script:
     """
@@ -66,7 +67,17 @@ process GET_AND_EVAL_MARKERS {
 }
 
 process REPORTING {
+    tag "${meta.data_id}"
+    publishDir "${params.results_dir}/${meta.data_id}", mode: 'copy', pattern: "figures/**"
+    publishDir "${params.results_dir}/${meta.data_id}", mode: 'copy', pattern: "tables/**"
 
+    input:
+    tuple val(meta), path(tables_path)
+
+    script:
+    """
+    source myconda; conda activate nsforestv4.1
+    """
 }
 
 workflow {
