@@ -72,14 +72,13 @@ process REPORTING {
     publishDir "${params.results_dir}/${meta.data_id}", mode: 'copy', pattern: "tables/**"
 
     input:
-    tuple val(meta), path(master_sheet_path)
+    tuple val(meta), path(ingested_h5ad_path), path(master_csv)
 
     output:
-    path "figures/**", emit: fig_path
-    path "tables/**", emit: fig_path
+    path "figures/**", emit: fig_path, optional: True
+    path "tables/**", emit: tables_path, optional: True
 
     script:
-    def master_fpath = 
     """
     source myconda; conda activate nsforestv4.1
     python ${projectDir}/src/plots_and_reporting.py \\
@@ -88,7 +87,7 @@ process REPORTING {
         --cluster_header "${meta.cluster_header}" \\
         --results_dir . \\
         --cluster_labels "${meta.cluster_labels}" \\
-        --master_results_filepath "${master_sheet_path}"\\
+        --master_results_filepath "${master_csv}"\\
     """
 }
 
@@ -118,5 +117,15 @@ workflow {
 
     GET_AND_EVAL_MARKERS(INGEST.out.ingested)
 
-    REPORTING(INGEST.out.ingested.join(GET_AND_EVAL_MARKERS.out.master_sheet_path))
+    ingested_keyed = INGEST.out.ingested.map { meta, h5ad -> tuple(meta.data_id, meta, h5ad) }
+
+    master_keyed = GET_AND_EVAL_MARKERS.out.master_sheet_path.map { meta, master_csv -> tuple(meta.data_id, master_csv) }
+
+    reporting_inputs = ingested_keyed
+        .join(master_keyed)
+        .map { data_id, meta, h5ad, master_csv ->
+            tuple(meta, h5ad, master_csv)
+        }
+    
+    REPORTING(reporting_inputs)
 }
