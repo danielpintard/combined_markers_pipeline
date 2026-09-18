@@ -195,7 +195,7 @@ def results_to_long_df(df: pd.DataFrame, cluster_labels: list,
     d = df.copy()
     d = d[d["clusterName"].isin(cluster_labels)]
     long_df = d.melt(
-        id_vars=["dataset", "clusterName", "markerSet_dataContext"],
+        id_vars=["clusterName", "markerSet_dataContext"],
         value_vars=list(metrics),
         var_name="metric",
         value_name="score",
@@ -307,7 +307,7 @@ def main():
     ]
     
     for results_set in markerSet_dataContexts:
-        res_df = all_results_df[all_results_df['markerSet_dataContext'] == results_set]
+        res_df = all_results_df[all_results_df['markerSet_dataContext'] == results_set].copy()
         res_df['markers'] = res_df['markers'].apply(ast.literal_eval)
         
         if results_set == "class_markers_on_global_data": # conditional logic for handling the dotplots for class markers
@@ -346,12 +346,12 @@ def main():
                 save = f'{results_set}_class_plus_granular.png'
             )
         else: # conditional logic for other dotplots and their respective NS-Forest metrics barplots
-            marker_type = results_set.split("markers_on_")
+            marker_type = results_set.split("markers_on_")[0]
             data_type = results_set.split("_markers_on_")[1].split("_")[0]
             res_dict = dict(zip(res_df['clusterName'], res_df['markers']))
             clusters_only_dict = {
                 cluster: markers
-                for cluster, markers in res_dict if cluster in cluster_labels
+                for cluster, markers in res_dict.items() if cluster in cluster_labels
             }
             # create dotplots
             plot_dotplots_for_results(dotplot_dirpath = dotplot_dir, global_adata = adata, marker_dict = res_dict, cluster_label_marker_dict = clusters_only_dict,

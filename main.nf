@@ -18,7 +18,7 @@ process INGEST {
 
     output:
     tuple val(meta), path("ingested_h5ads/${meta.data_id}_ingested.h5ad"), emit: ingested
-    path "figures/**", emit: figures, optional: True
+    path "figures/**", emit: figures, optional: true
 
     script:
     def cxg_arg = (meta.cxg_flag == 'True') ? '--cxg' : ''
@@ -75,19 +75,19 @@ process REPORTING {
     tuple val(meta), path(ingested_h5ad_path), path(master_csv)
 
     output:
-    path "figures/**", emit: fig_path, optional: True
-    path "tables/**", emit: tables_path, optional: True
+    path "figures/**", emit: fig_path, optional: true
+    path "tables/**", emit: tables_path, optional: true
 
     script:
     """
     source myconda; conda activate nsforestv4.1
-    python ${projectDir}/src/plots_and_reporting.py \\
+    python ${projectDir}/src/plots_and_reports.py \\
         --data_id "${meta.data_id}" \\
         --path_to_ingested_h5ad "${ingested_h5ad_path}" \\
         --cluster_header "${meta.cluster_header}" \\
         --results_dir . \\
         --cluster_labels "${meta.cluster_labels}" \\
-        --master_results_filepath "${master_csv}"\\
+        --master_results_filepath "${master_csv}"
     """
 }
 

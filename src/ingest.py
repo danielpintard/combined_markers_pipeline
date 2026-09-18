@@ -202,7 +202,7 @@ def process_h5ad(data_id: str, data_path: str, args: argparse.Namespace):
     
     adata, dim_red = check_dimreds(adata=adata, seed=seed)
     
-    os.path.join(args.results_dir, "figures", exist_ok = True)
+    os.makedirs(os.path.join(args.results_dir, "figures"), exist_ok=True)
     if dim_red:
         os.makedirs(os.path.join(args.results_dir, "figures", "embeddings"), exist_ok=True)
         sc.settings.figdir = os.path.join(args.results_dir, "figures", "embeddings")    
