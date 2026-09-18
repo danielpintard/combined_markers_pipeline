@@ -18,7 +18,7 @@ process INGEST {
 
     output:
     tuple val(meta), path("ingested_h5ads/${meta.data_id}_ingested.h5ad"), emit: ingested
-    path "figures/**", emit: figures
+    path "figures/**", emit: figures, optional: True
 
     script:
     def cxg_arg = (meta.cxg_flag == 'True') ? '--cxg' : ''
@@ -72,11 +72,23 @@ process REPORTING {
     publishDir "${params.results_dir}/${meta.data_id}", mode: 'copy', pattern: "tables/**"
 
     input:
-    tuple val(meta), path(tables_path)
+    tuple val(meta), path(master_sheet_path)
+
+    output:
+    path "figures/**", emit: fig_path
+    path "tables/**", emit: fig_path
 
     script:
+    def master_fpath = 
     """
     source myconda; conda activate nsforestv4.1
+    python ${projectDir}/src/plots_and_reporting.py \\
+        --data_id "${meta.data_id}" \\
+        --path_to_ingested_h5ad "${ingested_h5ad_path}" \\
+        --cluster_header "${meta.cluster_header}" \\
+        --results_dir . \\
+        --cluster_labels "${meta.cluster_labels}" \\
+        --master_results_filepath "${master_sheet_path}"\\
     """
 }
 
@@ -106,5 +118,5 @@ workflow {
 
     GET_AND_EVAL_MARKERS(INGEST.out.ingested)
 
-    REPORTING(GET_AND_EVAL_MARKERS.out.tables_path)
+    REPORTING(INGEST.out.ingested.join(GET_AND_EVAL_MARKERS.out.master_sheet_path))
 }

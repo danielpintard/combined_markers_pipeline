@@ -115,7 +115,7 @@ def main():
     print("EVALUATING GLOBAL MARKERS ON LOCAL DATA\n")
     global_marker_on_local_data_res = ev.DecisionTree(adata=local_adata, cluster_header=cluster_header, markers_dict=global_markers_endo_only, save = True,
                                                       output_folder=tables_subdirpath, outputfilename_prefix="global_markers_eval_on_local_data_results")
-    global_marker_on_local_data_res = ev.add_fraction(adata=local_adata, cluster_header=cluster_header, output_folder=tables_subdirpath, 
+    global_marker_on_local_data_res = ev.add_fraction(adata=local_adata, df_results=global_marker_on_local_data_res, cluster_header=cluster_header, output_folder=tables_subdirpath, 
                                                       outputfilename_prefix="global_markers_eval_on_local_data_results")
     
     print("EVALUATING LOCAL MARKERS ON GLOBAL DATA\n")
@@ -126,7 +126,7 @@ def main():
     
     local_marker_on_global_data_res = ev.DecisionTree(adata=global_adata, cluster_header=cluster_header, markers_dict=local_markers, save = True, 
                                                       output_folder=tables_subdirpath, outputfilename_prefix="local_markers_eval_on_global_data_results")
-    local_marker_on_global_data_res = ev.add_fraction(adata=global_adata, cluster_header=cluster_header, output_folder=tables_subdirpath,
+    local_marker_on_global_data_res = ev.add_fraction(adata=global_adata, df_results="local_marker_on_global_data_res", cluster_header=cluster_header, output_folder=tables_subdirpath,
                                                       outputfilename_prefix="local_markers_eval_on_global_data_results")
     
     print("EVALUATING COMBINED MARKER SETS ON GLOBAL DATA\n")
@@ -144,7 +144,7 @@ def main():
     print("EVALUATING COMBINED MARKER SETS ON LOCAL DATA\n")
     combined_markers_on_local_data = ev.DecisionTree(adata=local_adata, cluster_header=cluster_header, markers_dict=combined_markers, save = True, 
                                                      output_folder=tables_subdirpath, outputfilename_prefix="combined_markers_eval_on_local_data_results")
-    combined_markers_on_local_data = ev.add_fraction(adata=local_adata, cluster_header=cluster_header, markers_dict=combined_markers, output_folder=tables_subdirpath,
+    combined_markers_on_local_data = ev.add_fraction(adata=local_adata, df_results = combined_markers_on_local_data, cluster_header=cluster_header, markers_dict=combined_markers, output_folder=tables_subdirpath,
                                                      outputfilename_prefix="combined_markers_eval_on_local_data_results")
     
     

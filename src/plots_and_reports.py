@@ -178,7 +178,7 @@ def plot_dotplots_for_results(dotplot_dirpath: str, global_adata: ad.AnnData, ma
     )
     
     # local data dotplot
-    if local_adata != None: 
+    if local_adata is not None: 
         sc.pl.dotplot(
             local_adata, 
             var_names=cluster_label_marker_dict,
@@ -274,7 +274,7 @@ def main():
         
     
     # READ IN H5AD, CREATE ANNOTATIONS THAT WILL BE HANDY FOR PLOTTING AND COMPUTE HIEARCHICAL CLUSTERING
-    adata = sc.read_h5ad(results_dir) 
+    adata = sc.read_h5ad(h5ad_path) 
     
     local_adata = adata[adata.obs[cluster_header].isin(cluster_labels)].copy()
     local_adata.obs[cluster_header] = local_adata.obs[cluster_header].cat.remove_unused_categories()
@@ -308,7 +308,7 @@ def main():
     
     for results_set in markerSet_dataContexts:
         res_df = all_results_df[all_results_df['markerSet_dataContext'] == results_set]
-        res_df = res_df['markers'].apply(ast.literal_eval)
+        res_df['markers'] = res_df['markers'].apply(ast.literal_eval)
         
         if results_set == "class_markers_on_global_data": # conditional logic for handling the dotplots for class markers
             class_marker = res_df.loc[res_df['clusterName'] == 'Endothelial', 'markers'].values[0]
@@ -385,41 +385,7 @@ def main():
                                        metrics_2_plot=metrics, save_path=os.path.join(barplot_dir, f"{results_set}_metrics_comparison_barplot.png"))
     
     long_df = results_to_long_df(df=all_results_df, cluster_labels=cluster_labels, metrics=metrics)
-    master_comparison_plots(long_df=long_df, out_dir=barplot_dir, metrics=metrics, condition_label_order=condition_label_order)
-    
-    # # plot global markers dotplots
-    # global_on_global = all_results_df[all_results_df['markerSet_dataContext'] == 'global_markers_on_global_data']
-    # global_markers = {
-    #     cluster : list(ast.literal_eval(markers)) if isinstance(markers, str) else list(markers)
-    #     for cluster, markers in zip(global_on_global['clusterName'], global_on_global['NSForest_markers'])
-    # }
-    # global_markers_clusters_only = {
-    #      cluster: markers
-    #     for cluster, markers in global_markers if cluster in cluster_labels
-    # }    
-    
-    # # plot class markers dotplots
-    # class_results = all_results_df[all_results_df['markerSet_dataContext'] == 'class_markers_on_global_data']
-    # class_marker = class_results.loc[class_results['clusterName'] == 'Endothelial', 'markers'].values[0]
-    # class_marker = list(ast.literal_eval(class_marker)) if isinstance(class_marker, str) else list(class_marker)
-    # global_plus_class_markers = {
-    #     cluster : class_marker if cluster in cluster_labels else markers
-    #     for cluster, markers in global_markers.items()
-    #     }
-    # global_plus_class_markers_clusters_only = {
-    #     cluster: markers
-    #     for cluster, markers in global_plus_class_markers if cluster in cluster_labels
-    # }
-    # # plot_dotplots_for_results(dotplot_dirpath=dotplot_dir, global_adata=adata, marker_dict=global_plus_class_markers, 
-    # #                           cluster_label_marker_dict=global_plus_class_markers_clusters_only, cluster_header=cluster_header, marker_type_str="class",
-    # #                           data_type_str="global")
-    
-    # dotplot_data_tuples = {
-    #     "global_markers_on_global_data" : [global_markers, ],
-    #
-    
-    
-    
+    master_comparison_plots(long_df=long_df, out_dir=barplot_dir, metrics=metrics, condition_label_order=condition_label_order)  
     
 ###### FUNCTION DEFINITIONS END ######
 
