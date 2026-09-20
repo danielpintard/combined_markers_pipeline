@@ -280,7 +280,7 @@ def main():
     local_adata.obs[cluster_header] = local_adata.obs[cluster_header].cat.remove_unused_categories()
     
     # create annotations
-    adata.obs['subtype_plus_others'] = pd.Categorical(np.where(adata.obs[cluster_header].isin(cluster_labels), adata.obs[cluster_header], 'Other Cell Types'))
+    adata.obs['subtypes_plus_others'] = pd.Categorical(np.where(adata.obs[cluster_header].isin(cluster_labels), adata.obs[cluster_header], 'Other Cell Types'))
     endo_class_mapping = {"Endothelial" : cluster_labels}
     endo_class_mapping = {ct: group for group, types in {**endo_class_mapping}.items() for ct in types}
     adata.obs['class_plus_granular'] = adata.obs[cluster_header].astype(str).replace(endo_class_mapping).astype('category')
@@ -315,7 +315,7 @@ def main():
             class_marker = list(ast.literal_eval(class_marker)) if isinstance(class_marker, str) else list(class_marker)
             res_dict = {
                 cluster : list(ast.literal_eval(markers)) if isinstance(markers, str) else list(markers)
-                for cluster, markers in zip(res_df['clusterName'], res_df['NSForest_markers'])
+                for cluster, markers in zip(res_df['clusterName'], res_df['markers'])
                 }
             _res_dict = {}
             for cluster, marker in res_dict.items():
@@ -382,7 +382,7 @@ def main():
         df2 = df2[df2['clusterName'].isin(cluster_labels)]
         metric_comparison_barplots(df1 = df1, df1_hue_label = comparison[0], df2 = df2, df2_hue_label = comparison[1],
                                        hue_label_field='markerSet_dataContext', group_name_field='clusterName',
-                                       metrics_2_plot=metrics, save_path=os.path.join(barplot_dir, f"{results_set}_metrics_comparison_barplot.png"))
+                                       metrics_2_plot=metrics, save_path=os.path.join(barplot_dir, f"{comparison}_metrics_barplot.png"))
     
     long_df = results_to_long_df(df=all_results_df, cluster_labels=cluster_labels, metrics=metrics)
     master_comparison_plots(long_df=long_df, out_dir=barplot_dir, metrics=metrics, condition_label_order=condition_label_order)  

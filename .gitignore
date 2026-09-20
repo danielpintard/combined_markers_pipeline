@@ -11,3 +11,5 @@ docs/lab_notebook.md
 .vscode/
 .nextflow*
 work/
+trace-*
+nf_driver_*

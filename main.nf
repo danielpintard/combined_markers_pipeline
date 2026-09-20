@@ -23,7 +23,7 @@ process INGEST {
     script:
     def cxg_arg = (meta.cxg_flag == 'True') ? '--cxg' : ''
     """
-    source myconda; conda activate nsforestv4.1
+    source myconda; conda activate nsForest_env4.2
 
     python ${projectDir}/src/ingest.py \\
         --data_id "${meta.data_id}" \\
@@ -53,7 +53,7 @@ process GET_AND_EVAL_MARKERS {
 
     script:
     """
-    source myconda; conda activate nsforestv4.1
+    source myconda; conda activate nsForest_env4.2
 
     python ${projectDir}/src/get_markers_and_eval.py \\
         --data_id "${meta.data_id}" \\
@@ -80,7 +80,7 @@ process REPORTING {
 
     script:
     """
-    source myconda; conda activate nsforestv4.1
+    source myconda; conda activate nsForest_env4.2
     python ${projectDir}/src/plots_and_reports.py \\
         --data_id "${meta.data_id}" \\
         --path_to_ingested_h5ad "${ingested_h5ad_path}" \\

@@ -37,6 +37,13 @@ def nsforest_preprocessing(adata: ad.AnnData, data_id: str, cluster_header: str)
     
     return adata
 
+def _ensure_list_markers(df, col="markers"):
+    df = df.copy()
+    df[col] = df[col].apply(
+        lambda m: ast.literal_eval(m) if isinstance(m, str) else m
+    )
+    return df
+
 def main():
     
     #### argparse ####
@@ -68,14 +75,14 @@ def main():
     global_adata = nsforest_preprocessing(adata=global_adata, data_id=data_id, cluster_header=cluster_header)
 
     # create results/tables/ subdir before first call of NS-Forest
-    tables_subdirpath = os.path.join(results_dir, "tables")
+    tables_subdirpath = os.path.join(results_dir, "tables/")
     os.makedirs(tables_subdirpath, exist_ok=True)
     
     ###################### MARKER SET DISCOVERY ######################
     
-    print("DISCOVERING GLOBAL MARKERS\n")
+    print("\nDISCOVERING GLOBAL MARKERS")
     global_data_results = nsforesting.NSForest(adata = global_adata, cluster_header=cluster_header, save = True, 
-                                               output_folder=tables_subdirpath, outputfilename_prefix=f"global_NSForest_results",
+                                               output_folder=tables_subdirpath, outputfilename_prefix=f"global_NSForest",
                                                gene_selection=binary_thresh, n_jobs=njobs)
     
     global_markers = {
@@ -89,17 +96,17 @@ def main():
         if cluster in endo_labels
         }
     
-    print("DISCOVERING CLASS MARKER(S)\n")
+    print("\nDISCOVERING CLASS MARKER(S)")
     class_adata = adata.copy()
     endo_class_mapping = {"Endothelial" : endo_labels}
     endo_class_mapping = {ct: group for group, types in {**endo_class_mapping}.items() for ct in types}
     class_adata.obs['class_plus_granular'] = class_adata.obs[cluster_header].astype(str).replace(endo_class_mapping).astype('category')
-    
+    class_adata = nsforest_preprocessing(adata=class_adata, data_id = data_id, cluster_header="class_plus_granular")
     class_data_results = nsforesting.NSForest(adata = class_adata, cluster_header="class_plus_granular", save = True, output_folder=tables_subdirpath, 
-                                              outputfilename_prefix="class_w_global_NSForest_results",
+                                              outputfilename_prefix="class_w_global_NSForest",
                                               gene_selection=binary_thresh, n_jobs=njobs)
     
-    print("DISCOVERING LOCAL MARKERS\n")
+    print("\nDISCOVERING LOCAL MARKERS")
     local_adata = adata[adata.obs[cluster_header].isin(endo_labels)].copy()
     local_adata.obs[cluster_header] = local_adata.obs[cluster_header].cat.remove_unused_categories()
     
@@ -112,13 +119,14 @@ def main():
     ###################### MARKER SET EVALUATION ######################
     # so we have global on global res, local on local, and no combined marker results
     
-    print("EVALUATING GLOBAL MARKERS ON LOCAL DATA\n")
+    print("\nEVALUATING GLOBAL MARKERS ON LOCAL DATA")
     global_marker_on_local_data_res = ev.DecisionTree(adata=local_adata, cluster_header=cluster_header, markers_dict=global_markers_endo_only, save = True,
                                                       output_folder=tables_subdirpath, outputfilename_prefix="global_markers_eval_on_local_data_results")
+    global_marker_on_local_data_res = _ensure_list_markers(df=global_marker_on_local_data_res)
     global_marker_on_local_data_res = ev.add_fraction(adata=local_adata, df_results=global_marker_on_local_data_res, cluster_header=cluster_header, output_folder=tables_subdirpath, 
                                                       outputfilename_prefix="global_markers_eval_on_local_data_results")
     
-    print("EVALUATING LOCAL MARKERS ON GLOBAL DATA\n")
+    print("\nEVALUATING LOCAL MARKERS ON GLOBAL DATA")
     local_markers = {
         cluster: list(ast.literal_eval(markers)) if isinstance(markers, str) else list(markers)
         for cluster, markers in zip(local_data_results['clusterName'], local_data_results['NSForest_markers'])
@@ -126,10 +134,11 @@ def main():
     
     local_marker_on_global_data_res = ev.DecisionTree(adata=global_adata, cluster_header=cluster_header, markers_dict=local_markers, save = True, 
                                                       output_folder=tables_subdirpath, outputfilename_prefix="local_markers_eval_on_global_data_results")
-    local_marker_on_global_data_res = ev.add_fraction(adata=global_adata, df_results=local_marker_on_global_data_res, cluster_header=cluster_header, output_folder=tables_subdirpath,
+    local_marker_on_global_data_res = _ensure_list_markers(df=local_marker_on_global_data_res)
+    local_marker_on_global_data_res = ev.add_fraction(adata=global_adata, df_results=local_marker_on_global_data_res, cluster_header=cluster_header,output_folder=tables_subdirpath, 
                                                       outputfilename_prefix="local_markers_eval_on_global_data_results")
     
-    print("EVALUATING COMBINED MARKER SETS ON GLOBAL DATA\n")
+    print("\nEVALUATING COMBINED MARKER SETS ON GLOBAL DATA")
     class_marker = class_data_results.loc[class_data_results['clusterName'] == 'Endothelial', 'NSForest_markers'].values[0]
     class_marker = list(ast.literal_eval(class_marker)) if isinstance(class_marker, str) else list(class_marker)
     combined_markers = {
@@ -138,12 +147,14 @@ def main():
     }
     combined_markers_on_global_data = ev.DecisionTree(adata=global_adata, cluster_header=cluster_header, markers_dict=combined_markers, save = True, 
                                                       output_folder=tables_subdirpath, outputfilename_prefix="combined_markers_eval_on_global_data_results")
+    combined_markers_on_global_data = _ensure_list_markers(df=combined_markers_on_global_data)
     combined_markers_on_global_data = ev.add_fraction(adata=global_adata, df_results=combined_markers_on_global_data, cluster_header=cluster_header, output_folder=tables_subdirpath, 
                                                       outputfilename_prefix="combined_markers_eval_on_global_data_results")
     
-    print("EVALUATING COMBINED MARKER SETS ON LOCAL DATA\n")
+    print("\nEVALUATING COMBINED MARKER SETS ON LOCAL DATA")
     combined_markers_on_local_data = ev.DecisionTree(adata=local_adata, cluster_header=cluster_header, markers_dict=combined_markers, save = True, 
                                                      output_folder=tables_subdirpath, outputfilename_prefix="combined_markers_eval_on_local_data_results")
+    combined_markers_on_local_data = _ensure_list_markers(df=combined_markers_on_local_data)
     combined_markers_on_local_data = ev.add_fraction(adata=local_adata, df_results = combined_markers_on_local_data, cluster_header=cluster_header, output_folder=tables_subdirpath,
                                                      outputfilename_prefix="combined_markers_eval_on_local_data_results")
     
