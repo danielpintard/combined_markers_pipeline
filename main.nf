@@ -7,7 +7,7 @@ params.results_dir = "${projectDir}/results"
 
 process INGEST {
     tag "${meta.data_id}"
-    publishDir "${params.results_dir}/${meta.data_id}", mode: 'copy', pattern: "ingested_h5ads/*.h5ad"
+    // publishDir "${params.results_dir}/${meta.data_id}", mode: 'copy', pattern: "ingested_h5ads/*.h5ad"
     publishDir "${params.results_dir}/${meta.data_id}", mode: 'copy', pattern: "figures/**"
 
     input:
@@ -49,7 +49,7 @@ process GET_AND_EVAL_MARKERS {
 
     output:
     tuple val(meta), path("tables/**"), emit: tables_path
-    path "tables/master_results_sheet.csv", emit: master_sheet_path
+    tuple val(meta), path("tables/master_results_sheet.csv"), emit: master_sheet_path
 
     script:
     """

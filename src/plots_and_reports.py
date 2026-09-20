@@ -382,7 +382,7 @@ def main():
         df2 = df2[df2['clusterName'].isin(cluster_labels)]
         metric_comparison_barplots(df1 = df1, df1_hue_label = comparison[0], df2 = df2, df2_hue_label = comparison[1],
                                        hue_label_field='markerSet_dataContext', group_name_field='clusterName',
-                                       metrics_2_plot=metrics, save_path=os.path.join(barplot_dir, f"{comparison}_metrics_barplot.png"))
+                                       metrics_2_plot=metrics, save_path=os.path.join(barplot_dir, f"{comparison[0]}_vs_{comparison[1]}_metrics_barplot.png"))
     
     long_df = results_to_long_df(df=all_results_df, cluster_labels=cluster_labels, metrics=metrics)
     master_comparison_plots(long_df=long_df, out_dir=barplot_dir, metrics=metrics, condition_label_order=condition_label_order)  

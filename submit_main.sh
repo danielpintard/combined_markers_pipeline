@@ -11,6 +11,6 @@ module load nextflow
 
 nextflow run main.nf \
     -profile biowulf \
-    --samplesheet /data/$USER/combined_marker_pipeline/data/nftest_sheet.tsv \
-    -with-trace -with-report -with-timeline \
+    --samplesheet /data/pintardde/combined_marker_pipeline/data/sample_sheet.tsv \
+    -with-dag flowchart.html \
     -resume
