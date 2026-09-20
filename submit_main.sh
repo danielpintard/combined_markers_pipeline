@@ -13,4 +13,3 @@ nextflow run main.nf \
     -profile biowulf \
     --samplesheet /data/pintardde/combined_marker_pipeline/data/sample_sheet.tsv \
     -with-dag flowchart.html \
-    -resume

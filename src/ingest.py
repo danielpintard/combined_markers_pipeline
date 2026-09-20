@@ -226,7 +226,12 @@ def process_h5ad(data_id: str, data_path: str, args: argparse.Namespace):
         )
 
     os.makedirs(os.path.join(args.results_dir, 'ingested_h5ads'), exist_ok=True)
-    adata.write(os.path.join(args.results_dir, 'ingested_h5ads', f'{data_id}_ingested.h5ad'))
+    # adata.write(os.path.join(args.results_dir, 'ingested_h5ads', f'{data_id}_ingested.h5ad'))
+    adata.raw = None
+    for k in list(adata.obsp.keys()):       # neighbor graphs are big and recomputable
+        del adata.obsp[k]
+        
+    adata.write(os.path.join(args.results_dir, 'ingested_h5ads', f'{data_id}_ingested.h5ad'), compression="gzip")
     del adata 
     gc.collect()
     
